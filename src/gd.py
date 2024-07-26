@@ -9,6 +9,14 @@ from archs import load_architecture
 from utilities import get_gd_optimizer, get_gd_directory, get_loss_and_acc, compute_losses, \
     save_files, save_files_final, get_hessian_eigenvalues, iterate_dataset
 from data import load_dataset, take_first, DATASETS
+import os
+"""
+export DATASETS=/data/users/zhouwenjie/workspace/Spectral_Acceleration/data
+export CUDA_VISIBLE_DEVICES=6,7
+export RESULTS=/data/users/zhouwenjie/workspace/Spectral_Acceleration/results
+"""
+
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
 def main(dataset: str, arch_id: str, loss: str, opt: str, lr: float, max_steps: int, neigs: int = 0,

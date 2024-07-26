@@ -1,7 +1,6 @@
 '''
 Modified from https://github.com/pytorch/vision.git
 '''
-import testmath
 import math
 import torch.nn as nn
 import torch.nn.init as init
