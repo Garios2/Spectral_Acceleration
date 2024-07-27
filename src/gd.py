@@ -4,20 +4,21 @@ import torch
 from torch.nn.utils import parameters_to_vector
 
 import argparse
-
+from tqdm import tqdm
 from archs import load_architecture
 from utilities import get_gd_optimizer, get_gd_directory, get_loss_and_acc, compute_losses, \
-    save_files, save_files_final, get_hessian_eigenvalues, iterate_dataset
+    save_files, save_files_final, get_hessian_eigenvalues, iterate_dataset,compute_gradient
 from data import load_dataset, take_first, DATASETS
 import os
 """
 export DATASETS=/data/users/zhouwenjie/workspace/Spectral_Acceleration/data
-export CUDA_VISIBLE_DEVICES=6,7
+export CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7
 export RESULTS=/data/users/zhouwenjie/workspace/Spectral_Acceleration/results
 """
+import torch.distributed as dist
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
+print(device)
 
 def main(dataset: str, arch_id: str, loss: str, opt: str, lr: float, max_steps: int, neigs: int = 0,
          physical_batch_size: int = 1000, eig_freq: int = -1, iterate_freq: int = -1, save_freq: int = -1,
@@ -32,7 +33,8 @@ def main(dataset: str, arch_id: str, loss: str, opt: str, lr: float, max_steps: 
     loss_fn, acc_fn = get_loss_and_acc(loss)
 
     torch.manual_seed(seed)
-    network = load_architecture(arch_id, dataset).cuda()
+    network = load_architecture(arch_id, dataset).to(device)
+
     len_of_param = len(parameters_to_vector((network.parameters())))
 
     torch.manual_seed(7)
@@ -43,28 +45,33 @@ def main(dataset: str, arch_id: str, loss: str, opt: str, lr: float, max_steps: 
     train_loss, test_loss, train_acc, test_acc = \
         torch.zeros(max_steps), torch.zeros(max_steps), torch.zeros(max_steps), torch.zeros(max_steps)
     iterates = torch.zeros(max_steps // iterate_freq if iterate_freq > 0 else 0, len(projectors))
+
     eigs = torch.zeros(max_steps // eig_freq if eig_freq >= 0 else 0, neigs)
-    eigvecs = torch.zeros(max_steps // eig_freq if eig_freq >= 0 else 0, neigs, len_of_param)
+    eigvecs = torch.zeros(max_steps // eig_freq if eig_freq >= 0 else 0, len_of_param, neigs)
+    gradients = torch.zeros(max_steps // eig_freq if eig_freq >= 0 else 0, len_of_param)
+   # param_flow = torch.zeros(max_steps // eig_freq if eig_freq >= 0 else 0, len_of_param)
 
-    param_flow = torch.zeros(max_steps // eig_freq if eig_freq >= 0 else 0, len_of_param)
-
-    for step in range(0, max_steps):
+    trange = tqdm(range(max_steps))
+    for step in trange: 
         train_loss[step], train_acc[step] = compute_losses(network, [loss_fn, acc_fn], train_dataset,
                                                            physical_batch_size)
         test_loss[step], test_acc[step] = compute_losses(network, [loss_fn, acc_fn], test_dataset, physical_batch_size)
 
-        param_flow[step,:] = parameters_to_vector(network.parameters())
+        
 
         if eig_freq != -1 and step % eig_freq == 0:
             eigs[step // eig_freq, :], eigvecs[step // eig_freq, :,:] = get_hessian_eigenvalues(network, loss_fn, abridged_train, neigs=neigs,
                                                                 physical_batch_size=physical_batch_size)
             print("eigenvalues: ", eigs[step//eig_freq, :])
-
+            #param_flow[step // eig_freq,:] = parameters_to_vector(network.parameters())
+            gradients[step // eig_freq,:] = compute_gradient(network, loss_fn,abridged_train)
+            
         if iterate_freq != -1 and step % iterate_freq == 0:
             iterates[step // iterate_freq, :] = projectors.mv(parameters_to_vector(network.parameters()).cpu().detach())
 
         if save_freq != -1 and step % save_freq == 0:
             save_files(directory, [("eigs", eigs[:step // eig_freq]), ("iterates", iterates[:step // iterate_freq]),
+                                    ("grads", gradients[:step // eig_freq]),("eigvecs",eigvecs[:step // eig_freq]),
                                    ("train_loss", train_loss[:step]), ("test_loss", test_loss[:step]),
                                    ("train_acc", train_acc[:step]), ("test_acc", test_acc[:step])])
 
@@ -75,12 +82,13 @@ def main(dataset: str, arch_id: str, loss: str, opt: str, lr: float, max_steps: 
 
         optimizer.zero_grad()
         for (X, y) in iterate_dataset(train_dataset, physical_batch_size):
-            loss = loss_fn(network(X.cuda()), y.cuda()) / len(train_dataset)
+            loss = loss_fn(network(X.to(device)), y.to(device)) / len(train_dataset)
             loss.backward()
         optimizer.step()
 
     save_files_final(directory,
                      [("eigs", eigs[:(step + 1) // eig_freq]), ("iterates", iterates[:(step + 1) // iterate_freq]),
+                     ("grads", gradients[:(step + 1) // eig_freq]),("eigvecs",eigvecs[:(step + 1) // eig_freq]),
                       ("train_loss", train_loss[:step + 1]), ("test_loss", test_loss[:step + 1]),
                       ("train_acc", train_acc[:step + 1]), ("test_acc", test_acc[:step + 1])])
     if save_model:

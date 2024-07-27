@@ -111,8 +111,8 @@ def lanczos(matrix_vector, dim: int, neigs: int):
         gpu_vec = torch.tensor(vec, dtype=torch.float).cuda()
         return matrix_vector(gpu_vec)
 
-    operator = LinearOperator((dim, dim), matvec=mv)
-    evals, evecs = eigsh(operator, neigs)
+    operator = LinearOperator((dim, dim), matvec=mv, dtype=np.float32)
+    evals, evecs = eigsh(operator, neigs, which='LM')
     return torch.from_numpy(np.ascontiguousarray(evals[::-1]).copy()).float(), \
            torch.from_numpy(np.ascontiguousarray(np.flip(evecs, -1)).copy()).float()
 
