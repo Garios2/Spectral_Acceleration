@@ -621,7 +621,7 @@ def plot_h(net_type, d, L,n,X_size,momen,sharp,iter, flag,warmup,rep,freq,X,Y,re
         n = len(eigenvals_record)
         for i in range(4):
             # 提取第i维的数据
-            data_i = [torch.dot(torch.tensor(eigenvecs_record[j][0]).flatten(), gradients[j].flatten()).item() for j in range(n)]            # 计算颜色
+            data_i = [torch.dot(torch.tensor(eigenvecs_record[j][0]).flatten(), gradients[j].flatten()).item() for j in range(n)]       
             color = cmap(i / 3)  # 3是因为我们有4条线，所以我们需要在0到1之间均匀地选择4个值
             
             # 绘制线
