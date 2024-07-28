@@ -21,7 +21,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(device)
 
 class AcD(torch.optim.Optimizer):
-    def __init__(self, params, lr, mode=None, scaler=2.5):
+    def __init__(self, params, lr, mode=None, scaler=1.5):
         defaults = dict(lr=lr, mode=mode, scaler=scaler)
         super(AcD, self).__init__(params, defaults)
     
@@ -38,7 +38,7 @@ class AcD(torch.optim.Optimizer):
                     full_grad = grad.view(-1)
                 else:
                     full_grad = torch.cat([full_grad, grad.view(-1)])
-        grad_flat = flat_matrix(full_grad) * group['scaler']
+        grad_flat = flat_matrix(full_grad) 
 
 
         for group in self.param_groups:
@@ -55,7 +55,9 @@ class AcD(torch.optim.Optimizer):
                     grad_tmp = grad_flat[:len_now]
                     grad_flat = grad_flat[len_now:]
                     grad_tmp = grad_tmp.view_as(grad)
-                    grad = grad_tmp
+                    #grad = grad_tmp* group['scaler'] 这是v1
+                    #grad = grad + (group['scaler']-1)*grad_tmp 这是v2
+                    grad = grad + (group['scaler']-1)*grad_tmp
 
                 param.data.add_(-group['lr'], grad)
 
@@ -88,7 +90,7 @@ def main(dataset: str, arch_id: str, loss: str, opt: str, lr: float, max_steps: 
     projectors = torch.randn(nproj, len(parameters_to_vector(network.parameters())))
 
     #optimizer = get_gd_optimizer(network.parameters(), opt, lr, beta)
-    optimizer = AcD(params=network.parameters(), lr=lr, mode='flat_scaling',scaler=2.5)
+    optimizer = AcD(params=network.parameters(), lr=lr, mode='flat_scaling',scaler=1.5)
 
     train_loss, test_loss, train_acc, test_acc = \
         torch.zeros(max_steps), torch.zeros(max_steps), torch.zeros(max_steps), torch.zeros(max_steps)
@@ -140,9 +142,9 @@ def main(dataset: str, arch_id: str, loss: str, opt: str, lr: float, max_steps: 
                      [("eigs", eigs[:(step + 1) // eig_freq]), ("iterates", iterates[:(step + 1) // iterate_freq]),
                      ("grads", gradients[:(step + 1) // eig_freq]),("eigvecs",eigvecs[:(step + 1) // eig_freq]),
                       ("train_loss", train_loss[:step + 1]), ("test_loss", test_loss[:step + 1]),
-                      ("train_acc", train_acc[:step + 1]), ("test_acc", test_acc[:step + 1])], step="6k-10k-flat-scaling-2.5")
+                      ("train_acc", train_acc[:step + 1]), ("test_acc", test_acc[:step + 1])], step="6k-10k-flat-scaling-1.5v2")
     if save_model:
-        torch.save(network.state_dict(), f"{directory}/snapshot_6k-10k-flat-scaling-2.5")
+        torch.save(network.state_dict(), f"{directory}/snapshot_6k-10k-flat-scaling-1.5v2")
 
 
 if __name__ == "__main__":
