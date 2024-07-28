@@ -59,51 +59,6 @@ def plot_loss_traj(losses, fig_size, exp_name, logy=False):
     plt.show()
 
 
-def get_dataset_single_dirc(n, d):
-    # assert n >= d
-    X = np.sqrt(n) * torch.qr(torch.normal(torch.zeros(n, d)))[0]
-    inc_rate = torch.diag(torch.Tensor([1] + [0] * (d - 1)))
-    A = torch.eye(d) * np.sqrt(d) * inc_rate
-    Y = torch.matmul(X, A)
-    return X.to(dev), Y.to(dev)
-
-
-def get_dataset_multi_dirc(n, d):  # n样本数，d维度
-    X = np.sqrt(n) * torch.linalg.qr(torch.normal(torch.zeros(n, d)))[0]
-    inc_rate = torch.diag(torch.Tensor(np.linspace(1, 1 / d, d)))
-    A = torch.eye(d) * np.sqrt(d) * inc_rate
-    Y = torch.matmul(X, A)
-    return X.to(dev), Y.to(dev)
-
-def get_gaussian_data(n,d):
-    X = torch.randn(n, d)
-    Y = torch.randn(n, 1)
-    return X.to(dev), Y.to(dev)
-
-def get_dataset_factorization(n, d):
-    # assert n >= d
-    X = np.sqrt(n) * torch.eye(d)
-    inc_rate = torch.diag(torch.Tensor(np.linspace(1, 1 / d, d)))
-    A = torch.eye(d) * np.sqrt(d) * inc_rate
-    Y = torch.matmul(X, A)
-    return X.to(dev), Y.to(dev)
-
-
-def get_dataset_factorization_single(n, d):
-    # assert n >= d
-    X = np.sqrt(n) * torch.eye(d)
-    inc_rate = torch.diag(torch.Tensor([1] + [1e-5] * (d - 1)))
-    A = torch.eye(d) * np.sqrt(d) * inc_rate
-    Y = torch.matmul(X, A)
-    return X.to(dev), Y.to(dev)
-
-
-def get_dataset_scalar_factorization(n, d):
-    # assert n >= d
-    X = torch.eye(1)
-    Y = torch.eye(1)
-    return X.to(dev), Y.to(dev)
-
 
 class LinearNet(nn.Module):
     def __init__(self, X_size,L, d):
@@ -347,42 +302,40 @@ def eigenthings_tensor_utils(t, device=None, out_device='cpu', symmetric=False, 
             eigenvecs = eigenvecs.transpose(0, 1)
     return eigenvals, eigenvecs
 
-def get_25_2_cifar(n):
+def get_n_cifar(n):
     # 加载CIFAR-10数据集
     dataset = CIFAR10(root='/data/users/zhouwenjie/workspace/Spectral_Acceleration/data', train=True, download=True, transform=ToTensor())
 
     # 获取图像和标签
     images, labels = dataset.data, np.array(dataset.targets)
 
-    # 指定你想要的两个类别
-    category1 = 0  # 假设类别1为0
-    category2 = 1  # 假设类别2为1
+    # 指定你想要的类别
+    categories = list(range(10))  # 假设你想要的类别为0到9
 
-    # 找出两个类别的索引
-    indices_category1 = np.where(labels == category1)[0]
-    indices_category2 = np.where(labels == category2)[0]
+    # 初始化空列表来保存选定的图像和标签
+    selected_images = []
+    selected_labels = []
 
-    # 从每个类别中随机选取n/2张图片
-    selected_indices_category1 = np.random.choice(indices_category1, int(n/2), replace=False)
-    selected_indices_category2 = np.random.choice(indices_category2, int(n/2), replace=False)
+    # 对每个类别进行处理
+    for category in categories:
+        # 找出该类别的索引
+        indices_category = np.where(labels == category)[0]
 
-    # 合并两个类别的索引
-    selected_indices = np.concatenate((selected_indices_category1, selected_indices_category2))
+        # 从该类别中随机选取n/10张图片
+        selected_indices_category = np.random.choice(indices_category, int(n/10), replace=False)
 
-    # 选择图片和标签
-    selected_images = images[selected_indices]
-    selected_labels = labels[selected_indices]
+        # 添加选定的图像和标签到列表中
+        selected_images.extend(images[selected_indices_category])
+        selected_labels.extend(labels[selected_indices_category])
 
-    # 数据现在已经被选出，n张图片，每个类别n/2张
-    #train_images_flat = train_images_flat.astype(np.float32)
-    train_images_flat = selected_images.reshape(selected_images.shape[0], -1).astype('float32')
-    train_images_flat = train_images_flat.astype(np.float32)
-    #X = torch.tensor(train_images_flat) / 255.0  # 归一化图像数据到[0, 1]
+    # 数据现在已经被选出，n张图片，每个类别n/10张
+    train_images_flat = np.array(selected_images).reshape(len(selected_images), -1).astype('float32')
     X = torch.tensor(train_images_flat, dtype=torch.float32) / 255.0  # 归一化图像数据到[0, 1]
 
     Y = torch.tensor(selected_labels,dtype=torch.int64)
     Y = Y.view(n,1)
     return X,Y
+
 
 def quadratic_loss(Y_hat, Y):
     """Batched quadratic loss"""
@@ -649,7 +602,7 @@ if __name__ == '__main__':
     momentum = 0
 
     # data
-    X, Y = get_25_2_cifar(n)
+    X, Y = get_n_cifar(n)
 
     #X, Y = X.to(dev), Y.to(dev)
     for net_type in ["tanh"]:

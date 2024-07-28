@@ -10,9 +10,10 @@ from torch.optim import SGD
 from torch.optim.optimizer import Optimizer
 from torch.utils.data import Dataset, DataLoader
 import os
-
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+print(device)
 # the default value for "physical batch size", which is the largest batch size that we try to put on the GPU
-DEFAULT_PHYS_BS = 1000
+DEFAULT_PHYS_BS = 5000
 
 
 def get_gd_directory(dataset: str, lr: float, arch_id: str, seed: int, opt: str, loss: str, beta: float = None):
@@ -57,12 +58,35 @@ def save_files_final(directory: str, arrays: List[Tuple[str, torch.Tensor]]):
     for (arr_name, arr) in arrays:
         torch.save(arr, f"{directory}/{arr_name}_final")
 
+def save_files_at_nstep(directory: str, arrays: List[Tuple[str, torch.Tensor]], step: str):
+    """Save a bunch of tensors."""
+    for (arr_name, arr) in arrays:
+        torch.save(arr, f"{directory}/{arr_name}_{step}_step")
+
 
 def iterate_dataset(dataset: Dataset, batch_size: int):
     """Iterate through a dataset, yielding batches of data."""
     loader = DataLoader(dataset, batch_size=batch_size, shuffle=False)
     for (batch_X, batch_y) in loader:
         yield batch_X.cuda(), batch_y.cuda()
+
+
+def compute_flat_matrix(nfilter:int, eigvecs):
+    """把nfilter即topn个特征方向给滤掉,M = I-\Sigma_{i=0}^{i=nfilter-1} (eigvecs[i]*eigvecs[i]^T)"""
+    # 获取特征向量的维度
+
+    # 遍历前nfilter个特征向量，并将它们存储在一个列表中
+    
+    vecs = [eigvecs[:,i].to(device) for i in range(nfilter)]
+    
+    # 创建一个函数，该函数接受一个向量，并返回该向量与矩阵M的乘积
+    def matvec(v):
+        w = v.clone().to(device)
+        for vec in vecs:
+            #print("Shape of vecs:",vec.shape)
+            w -= (v @ vec) * vec
+        return w
+    return matvec
 
 
 def compute_losses(network: nn.Module, loss_functions: List[nn.Module], dataset: Dataset,

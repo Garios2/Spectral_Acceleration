@@ -24,19 +24,38 @@ class AcD(torch.optim.Optimizer):
     def __init__(self, params, lr, mode=None, scaler=2.5):
         defaults = dict(lr=lr, mode=mode, scaler=scaler)
         super(AcD, self).__init__(params, defaults)
-
+    
     def step(self, flat_matrix=None):
+        full_grad = None
+
+        
         for group in self.param_groups:
             for param in group['params']:
                 if param.grad is None:
                     continue
                 grad = param.grad.data
+                if full_grad is None:
+                    full_grad = grad.view(-1)
+                else:
+                    full_grad = torch.cat([full_grad, grad.view(-1)])
+        grad_flat = flat_matrix(full_grad) * group['scaler']
 
+
+        for group in self.param_groups:
+            for param in group['params']:
+                if param.grad is None:
+                    continue
+                grad = param.grad.data
+                #print("shape of grad:"+str(grad.shape))
+                len_now = len(grad.view(-1))
                 # 根据模式修改梯度
                 if group['mode'] == 'global_scaling':
                     grad *= group['scaler']
                 elif group['mode'] == 'flat_scaling' and flat_matrix is not None:
-                    grad = flat_matrix(grad) * group['scaler']
+                    grad_tmp = grad_flat[:len_now]
+                    grad_flat = grad_flat[len_now:]
+                    grad_tmp = grad_tmp.view_as(grad)
+                    grad = grad_tmp
 
                 param.data.add_(-group['lr'], grad)
 
@@ -69,7 +88,7 @@ def main(dataset: str, arch_id: str, loss: str, opt: str, lr: float, max_steps: 
     projectors = torch.randn(nproj, len(parameters_to_vector(network.parameters())))
 
     #optimizer = get_gd_optimizer(network.parameters(), opt, lr, beta)
-    optimizer = AcD(params=network.parameters(), lr=lr, mode='global_scaling',scaler=2.5)
+    optimizer = AcD(params=network.parameters(), lr=lr, mode='flat_scaling',scaler=2.5)
 
     train_loss, test_loss, train_acc, test_acc = \
         torch.zeros(max_steps), torch.zeros(max_steps), torch.zeros(max_steps), torch.zeros(max_steps)
@@ -89,8 +108,9 @@ def main(dataset: str, arch_id: str, loss: str, opt: str, lr: float, max_steps: 
         
 
         if eig_freq != -1 and step % eig_freq == 0:
-            eigs[step // eig_freq, :], eigvecs[step // eig_freq, :,:] = get_hessian_eigenvalues(network, loss_fn, abridged_train, neigs=neigs,
+            eigs[step // eig_freq, :], eigvecs[step // eig_freq, :,:] = get_hessian_eigenvalues(network, loss_fn, train_dataset, neigs=neigs,
                                                                 physical_batch_size=physical_batch_size)
+            
             print("eigenvalues: ", eigs[step//eig_freq, :])
             #param_flow[step // eig_freq,:] = parameters_to_vector(network.parameters())
             gradients[step // eig_freq,:] = compute_gradient(network, loss_fn,train_dataset)
@@ -120,9 +140,9 @@ def main(dataset: str, arch_id: str, loss: str, opt: str, lr: float, max_steps: 
                      [("eigs", eigs[:(step + 1) // eig_freq]), ("iterates", iterates[:(step + 1) // iterate_freq]),
                      ("grads", gradients[:(step + 1) // eig_freq]),("eigvecs",eigvecs[:(step + 1) // eig_freq]),
                       ("train_loss", train_loss[:step + 1]), ("test_loss", test_loss[:step + 1]),
-                      ("train_acc", train_acc[:step + 1]), ("test_acc", test_acc[:step + 1])], step="6k-10k-global-scaling-2.5")
+                      ("train_acc", train_acc[:step + 1]), ("test_acc", test_acc[:step + 1])], step="6k-10k-flat-scaling-2.5")
     if save_model:
-        torch.save(network.state_dict(), f"{directory}/snapshot_6k-10k-global-scaling-2.5")
+        torch.save(network.state_dict(), f"{directory}/snapshot_6k-10k-flat-scaling-2.5")
 
 
 if __name__ == "__main__":
