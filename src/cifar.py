@@ -6,7 +6,7 @@ import os
 import torch
 from torch import Tensor
 import torch.nn.functional as F
-
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 DATASETS_FOLDER = os.environ["DATASETS"]
 
 def center(X_train: np.ndarray, X_test: np.ndarray):
@@ -39,8 +39,12 @@ def load_cifar(loss: str) -> (TensorDataset, TensorDataset):
     cifar10_train = CIFAR10(root=DATASETS_FOLDER, download=True, train=True)
     cifar10_test = CIFAR10(root=DATASETS_FOLDER, download=True, train=False)
     X_train, X_test = flatten(cifar10_train.data / 255), flatten(cifar10_test.data / 255)
+    #X_train = X_train.to(device)
+    #X_test = X_test.to(device)
     y_train, y_test = make_labels(torch.tensor(cifar10_train.targets), loss), \
         make_labels(torch.tensor(cifar10_test.targets), loss)
+    #y_train = y_train.to(device)
+    #y_test = y_test.to(device)
     center_X_train, center_X_test = center(X_train, X_test)
     standardized_X_train, standardized_X_test = standardize(center_X_train, center_X_test)
     train = TensorDataset(torch.from_numpy(unflatten(standardized_X_train, (32, 32, 3)).transpose((0, 3, 1, 2))).float(), y_train)

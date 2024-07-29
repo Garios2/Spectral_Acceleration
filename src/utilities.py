@@ -16,6 +16,9 @@ print(device)
 DEFAULT_PHYS_BS = 5000
 
 
+
+
+
 def get_gd_directory(dataset: str, lr: float, arch_id: str, seed: int, opt: str, loss: str, beta: float = None):
     """Return the directory in which the results should be saved."""
     results_dir = os.environ["RESULTS"]
