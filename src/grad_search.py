@@ -78,7 +78,7 @@ def main(dataset: str, arch_id: str, loss: str, opt: str, lr: float, max_steps: 
     ax2 = fig.add_subplot(gs[1, 0])
     cmap = plt.get_cmap('viridis')
     end_time=[]
-    for i, lr in enumerate(np.linspace(0.001,0.1,50)):
+    for i, lr in enumerate(np.linspace(0.0005,0.15,200)):
         network = load_architecture(arch_id, dataset).to(device)
         #optimizer = get_gd_optimizer(network.parameters(), opt, lr, beta)
         optimizer = AcD(params=network.parameters(), lr=lr, mode='global_scaling',scaler=1)
@@ -110,13 +110,12 @@ def main(dataset: str, arch_id: str, loss: str, opt: str, lr: float, max_steps: 
                 loss.backward()
             optimizer.step(flat_matrix=None)
         
-        ax1.plot(train_loss,color = cmap(i/25))
+        #ax1.plot(train_loss,color = cmap(i/25))
         name = "learning_rate_{}".format(lr)
         save_files_at_nstep(directory,
                         [ ("iterates", iterates[:(step + 1) // iterate_freq]),
-                        ("train_loss", train_loss[:step + 1]), ("test_loss", test_loss[:step + 1]),
-                        ("train_acc", train_acc[:step + 1]), ("test_acc", test_acc[:step + 1])], step=name)
-    ax2.plot(np.linspace(0.001,0.1,50), end_time)
+                        ("train_loss", train_loss[:step + 1]), ("test_loss", test_loss[:step + 1]),], step=name)
+    ax2.plot(np.linspace(0.0005,0.15,200), end_time)
     ax2.set_xlabel("learning rate")
     ax2.set_ylabel("iteration at 0.99 acc")
     ax1.set_ylabel("train loss")
