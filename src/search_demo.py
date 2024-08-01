@@ -26,18 +26,18 @@ ax2 = fig.add_subplot(gs[1, 0])
 cmap = plt.get_cmap('viridis')
 end_time=[]
 
-for i, lr in enumerate(np.linspace(0.001,0.025,25)):
+lr = 0.0505
     
-    train_loss = torch.load(f"{directory}/train_loss_learning_rate_{lr}_step")
-    print(len(train_loss))
-    ax1.plot(train_loss,color = cmap(i/25))
-    end_time.append(len(train_loss))
+train_loss = torch.load(f"{directory}/train_loss_learning_rate_{lr}_step")
+test_loss = torch.load(f"{directory}/test_loss_learning_rate_{lr}_step")
+print(len(train_loss))
+ax1.plot(train_loss)
+ax2.plot(test_loss)
 
-ax2.plot(np.linspace(0.001,0.025,25), end_time)
-ax2.set_xlabel("learning rate")
-ax2.set_ylabel("iteration at 0.99 acc")
+ax2.set_xlabel("iteration")
+ax2.set_ylabel("test loss")
 ax1.set_ylabel("train loss")
-ax1.set_yscale('log')
+#ax1.set_yscale('log')
 ax1.set_xlabel("iteration")
 fig_save = f"{directory}/figures/grad_search.svg"
 plt.savefig(fig_save, bbox_inches='tight', pad_inches=0)
