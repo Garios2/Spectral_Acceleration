@@ -28,6 +28,9 @@ def get_gd_directory(dataset: str, lr: float, arch_id: str, seed: int, opt: str,
     elif opt == "polyak" or opt == "nesterov":
         return f"{directory}/lr_{lr}_beta_{beta}"
 
+def weights_init(m,gain):
+    if isinstance(m, torch.nn.Conv2d) or isinstance(m, torch.nn.Linear):
+        torch.nn.init.xavier_uniform_(m.weight.data,gain=gain)
 
 def get_flow_directory(dataset: str, arch_id: str, seed: int, loss: str, tick: float):
     """Return the directory in which the results should be saved."""
