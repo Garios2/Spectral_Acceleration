@@ -79,7 +79,7 @@ def main(dataset: str, arch_id: str, loss: str, opt: str, lr: float, max_steps: 
     ax2 = fig.add_subplot(gs[1, 0])
     cmap = plt.get_cmap('viridis')
 
-    for seed in [1,2,3,4,5]:
+    for seed in [1,2,3]:
         torch.manual_seed(seed)
         print(f"{lr}-current lr")
         network = load_architecture(arch_id, dataset).to(device)

@@ -2,15 +2,15 @@ import torch
 import matplotlib.pyplot as plt
 from os import environ
 
-dataset = "cifar10-5k"
-arch = "fc-tanh"
+dataset = "cifar10-10k"
+arch = "fc-relu"
 loss = "mse"
-gd_lr = 0.08
-eig_freq = 100
+gd_lr = 0.05
+eig_freq = 20
 cmap = plt.get_cmap('viridis')
 gd_directory = f"{environ['RESULTS']}/{dataset}/{arch}/seed_0/{loss}/polyak/grad_search"
 plt.figure(figsize=(5, 5), dpi=100)
-for i in [1,2,3,4,5]:
+for i in [1,2]:
     
     gd_train_loss = torch.load(f"{gd_directory}/train_loss_seed_is_{i}_step")
     sharpness = torch.load(f"{gd_directory}/eigs_seed_is_{i}_step")[:,0]

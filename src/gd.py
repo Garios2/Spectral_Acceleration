@@ -26,19 +26,19 @@ class AcD(torch.optim.Optimizer):
         super(AcD, self).__init__(params, defaults)
     
     def step(self, flat_matrix=None):
-        full_grad = None
-
-        
-        for group in self.param_groups:
-            for param in group['params']:
-                if param.grad is None:
-                    continue
-                grad = param.grad.data
-                if full_grad is None:
-                    full_grad = grad.view(-1)
-                else:
-                    full_grad = torch.cat([full_grad, grad.view(-1)])
-        grad_flat = flat_matrix(full_grad) 
+        mode = self.param_groups[0]['mode']
+        if mode != 'global_scaling':
+            full_grad = None
+            for group in self.param_groups:
+                for param in group['params']:
+                    if param.grad is None:
+                        continue
+                    grad = param.grad.data
+                    if full_grad is None:
+                        full_grad = grad.view(-1)
+                    else:
+                        full_grad = torch.cat([full_grad, grad.view(-1)])
+            grad_flat = flat_matrix(full_grad) 
 
 
         for group in self.param_groups:
@@ -55,21 +55,21 @@ class AcD(torch.optim.Optimizer):
                     grad_tmp = grad_flat[:len_now]
                     grad_flat = grad_flat[len_now:]
                     grad_tmp = grad_tmp.view_as(grad)
-                    grad = grad_tmp* group['scaler'] #这是v1
+                    grad = grad_tmp* group['scaler'] #这是v1,v1是抛弃高频
                     #grad = grad + (group['scaler']-1)*grad_tmp #这是v2
                 elif group['mode'] == 'flat_scaling_v2' and flat_matrix is not None:
                     grad_tmp = grad_flat[:len_now]
                     grad_flat = grad_flat[len_now:]
                     grad_tmp = grad_tmp.view_as(grad)
                     #grad = grad_tmp* group['scaler'] #这是v1
-                    grad = grad + (group['scaler']-1)*grad_tmp #这是v2
+                    grad = grad + (group['scaler']-1)*grad_tmp #这是v2，v2是高频不加速
 
                 param.data.add_(-group['lr'], grad)
 
 
 
 
-def main(dataset: str, arch_id: str, loss: str, opt: str, lr: float, max_steps: int, neigs: int = 0,
+def main(dataset: str, arch_id: str, loss: str, opt: str, lr: float, max_steps: int, mode: str="global_scaling",  neigs: int = 0, 
          physical_batch_size: int = 5000, eig_freq: int = -1, iterate_freq: int = -1, save_freq: int = -1,
          save_model: bool = False, beta: float = 0.0, nproj: int = 0,
          loss_goal: float = None, acc_goal: float = None, abridged_size: int = 5000, seed: int = 0, scaling: float = 1.0):
@@ -80,8 +80,7 @@ def main(dataset: str, arch_id: str, loss: str, opt: str, lr: float, max_steps: 
     abridged_train = take_first(train_dataset, abridged_size)
     train_dataset = [(x.to(device), y.to(device)) for x, y in train_dataset]
     test_dataset = [(x.to(device), y.to(device)) for x, y in test_dataset]
-    
-
+    print(mode)
     loss_fn, acc_fn = get_loss_and_acc(loss)
 
     torch.manual_seed(seed)
@@ -96,20 +95,19 @@ def main(dataset: str, arch_id: str, loss: str, opt: str, lr: float, max_steps: 
     torch.manual_seed(7)
     projectors = torch.randn(nproj, len(parameters_to_vector(network.parameters())))
     #optimizer = get_gd_optimizer(network.parameters(), opt, lr, beta)
-    optimizer = AcD(params=network.parameters(), lr=lr, mode='flat_scaling_v2',scaler=scaling)
+    optimizer = AcD(params=network.parameters(), lr=lr, mode=mode,scaler=scaling)
 
     train_loss, test_loss, train_acc, test_acc = \
         torch.zeros(max_steps), torch.zeros(max_steps), torch.zeros(max_steps), torch.zeros(max_steps)
     iterates = torch.zeros(max_steps // iterate_freq if iterate_freq > 0 else 0, len(projectors))
-    nfilter=10
+    nfilter=20
     eigs = torch.zeros(max_steps // eig_freq if eig_freq >= 0 else 0, neigs)
     eigvecs = torch.zeros(max_steps // eig_freq if eig_freq >= 0 else 0, len_of_param, neigs)
     gradients = torch.zeros(max_steps // eig_freq if eig_freq >= 0 else 0, len_of_param)
    # param_flow = torch.zeros(max_steps // eig_freq if eig_freq >= 0 else 0, len_of_param)
     #flat_matrix = torch.eye(len_of_param)
     flat_matrix = None
-    trange = tqdm(range(max_steps))
-    for step in trange: 
+    for step in range(max_steps): 
         train_loss[step], train_acc[step] = compute_losses(network, [loss_fn, acc_fn], train_dataset,
                                                            physical_batch_size)
         test_loss[step], test_acc[step] = compute_losses(network, [loss_fn, acc_fn], test_dataset, physical_batch_size)
@@ -134,6 +132,8 @@ def main(dataset: str, arch_id: str, loss: str, opt: str, lr: float, max_steps: 
                                    ("train_acc", train_acc[:step]), ("test_acc", test_acc[:step])])
 
         print(f"{step}\t{train_loss[step]:.3f}\t{train_acc[step]:.3f}\t{test_loss[step]:.3f}\t{test_acc[step]:.3f}")
+        if step == 3000:
+            torch.save(network.state_dict(), f"{directory}/snapshot_3k")
 
         if (loss_goal != None and train_loss[step] < loss_goal) or (acc_goal != None and train_acc[step] > acc_goal):
             break
@@ -143,7 +143,7 @@ def main(dataset: str, arch_id: str, loss: str, opt: str, lr: float, max_steps: 
             loss = loss_fn(network(X.to(device)), y.to(device)) / len(train_dataset)
             loss.backward()
         optimizer.step(flat_matrix=flat_matrix)
-    save_name = "3k-10k-flat-scaling-v2-{}".format(scaling)
+    save_name = "0k-10k-{}-{}-top20".format(mode, scaling)
     save_files_at_nstep(directory,
                      [("eigs", eigs[:(step + 1) // eig_freq]), ("iterates", iterates[:(step + 1) // iterate_freq]),
                      ("grads", gradients[:(step + 1) // eig_freq]),("eigvecs",eigvecs[:(step + 1) // eig_freq]),
@@ -162,6 +162,8 @@ if __name__ == "__main__":
     parser.add_argument("max_steps", type=int, help="the maximum number of gradient steps to train for")
     parser.add_argument("--opt", type=str, choices=["gd", "polyak", "nesterov"],
                         help="which optimization algorithm to use", default="gd")
+    parser.add_argument("--mode", type=str, choices=["global_scaling", "flat_scaling_v1", "flat_scaling_v2"],
+                        help="which scaling type", default="global_scaling")
     parser.add_argument("--seed", type=int, help="the random seed used when initializing the network weights",
                         default=0)
     parser.add_argument("--beta", type=float, help="momentum parameter (used if opt = polyak or nesterov)")
@@ -183,9 +185,10 @@ if __name__ == "__main__":
     parser.add_argument("--save_model", type=bool, default=True,
                         help="if 'true', save model weights at end of training")
     parser.add_argument("--scaling", type=float, default=1.0, help="the scaling")
+
     args = parser.parse_args()
 
-    main(dataset=args.dataset, arch_id=args.arch_id, loss=args.loss, opt=args.opt, lr=args.lr, max_steps=args.max_steps,
+    main(dataset=args.dataset, arch_id=args.arch_id, loss=args.loss, opt=args.opt, mode=args.mode, lr=args.lr, max_steps=args.max_steps,
          neigs=args.neigs, physical_batch_size=args.physical_batch_size, eig_freq=args.eig_freq,
          iterate_freq=args.iterate_freq, save_freq=args.save_freq, save_model=args.save_model, beta=args.beta,
          nproj=args.nproj, loss_goal=args.loss_goal, acc_goal=args.acc_goal, abridged_size=args.abridged_size,
