@@ -20,7 +20,14 @@ export RESULTS=/data/users/zhouwenjie/workspace/Spectral_Acceleration/results
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(device)
 
+
 class AcD(torch.optim.Optimizer):
+    '''
+    此为核心优化算法,即通过一个scaler来加倍步长,三种加倍方式:
+    global_scaling 全局加速scaler倍
+    flat_scaling_v1 高频速度设为0 低频加速scaler倍
+    flat_scaling_v2 高频速度设为0 低频加速scaler倍
+    '''
     def __init__(self, params, lr, mode=None, scaler=1.5):
         defaults = dict(lr=lr, mode=mode, scaler=scaler)
         super(AcD, self).__init__(params, defaults)
@@ -72,7 +79,7 @@ class AcD(torch.optim.Optimizer):
 def main(dataset: str, arch_id: str, loss: str, opt: str, lr: float, max_steps: int, mode: str="global_scaling",  neigs: int = 0, 
          physical_batch_size: int = 5000, eig_freq: int = -1, iterate_freq: int = -1, save_freq: int = -1,
          save_model: bool = False, beta: float = 0.0, nproj: int = 0,
-         loss_goal: float = None, acc_goal: float = None, abridged_size: int = 5000, seed: int = 0, scaling: float = 1.0):
+         loss_goal: float = None, acc_goal: float = None, abridged_size: int = 5000, seed: int = 0, scaling: float = 1.0, nfilter: int = 10):
     directory = get_gd_directory(dataset, lr, arch_id, seed, opt, loss, beta)
     print(f"output directory: {directory}")
     makedirs(directory, exist_ok=True)
@@ -85,8 +92,9 @@ def main(dataset: str, arch_id: str, loss: str, opt: str, lr: float, max_steps: 
 
     torch.manual_seed(seed)
     network = load_architecture(arch_id, dataset).to(device)
-    pretrained_dict = torch.load(f"{directory}/snapshot_3k")
-    network.load_state_dict(pretrained_dict)
+    if mode != 'global_scaling' and scaling !=1.0:
+        pretrained_dict = torch.load(f"{directory}/snapshot_3k")
+        network.load_state_dict(pretrained_dict)
 
 
 
@@ -100,7 +108,7 @@ def main(dataset: str, arch_id: str, loss: str, opt: str, lr: float, max_steps: 
     train_loss, test_loss, train_acc, test_acc = \
         torch.zeros(max_steps), torch.zeros(max_steps), torch.zeros(max_steps), torch.zeros(max_steps)
     iterates = torch.zeros(max_steps // iterate_freq if iterate_freq > 0 else 0, len(projectors))
-    nfilter=20
+    
     eigs = torch.zeros(max_steps // eig_freq if eig_freq >= 0 else 0, neigs)
     eigvecs = torch.zeros(max_steps // eig_freq if eig_freq >= 0 else 0, len_of_param, neigs)
     gradients = torch.zeros(max_steps // eig_freq if eig_freq >= 0 else 0, len_of_param)
@@ -132,7 +140,8 @@ def main(dataset: str, arch_id: str, loss: str, opt: str, lr: float, max_steps: 
                                    ("train_acc", train_acc[:step]), ("test_acc", test_acc[:step])])
 
         print(f"{step}\t{train_loss[step]:.3f}\t{train_acc[step]:.3f}\t{test_loss[step]:.3f}\t{test_acc[step]:.3f}")
-        if step == 3000:
+        
+        if step == 3000 and mode=='global_scaling' and scaling==1.0:
             torch.save(network.state_dict(), f"{directory}/snapshot_3k")
 
         if (loss_goal != None and train_loss[step] < loss_goal) or (acc_goal != None and train_acc[step] > acc_goal):
@@ -143,7 +152,7 @@ def main(dataset: str, arch_id: str, loss: str, opt: str, lr: float, max_steps: 
             loss = loss_fn(network(X.to(device)), y.to(device)) / len(train_dataset)
             loss.backward()
         optimizer.step(flat_matrix=flat_matrix)
-    save_name = "0k-10k-{}-{}-top20".format(mode, scaling)
+    save_name = "{}_{}_top_{}".format(mode, scaling,nfilter)
     save_files_at_nstep(directory,
                      [("eigs", eigs[:(step + 1) // eig_freq]), ("iterates", iterates[:(step + 1) // iterate_freq]),
                      ("grads", gradients[:(step + 1) // eig_freq]),("eigvecs",eigvecs[:(step + 1) // eig_freq]),
@@ -185,6 +194,7 @@ if __name__ == "__main__":
     parser.add_argument("--save_model", type=bool, default=True,
                         help="if 'true', save model weights at end of training")
     parser.add_argument("--scaling", type=float, default=1.0, help="the scaling")
+    parser.add_argument("--nfilter", type=int, default=10, help="the number of top eigenvecter to filter")
 
     args = parser.parse_args()
 
@@ -192,4 +202,4 @@ if __name__ == "__main__":
          neigs=args.neigs, physical_batch_size=args.physical_batch_size, eig_freq=args.eig_freq,
          iterate_freq=args.iterate_freq, save_freq=args.save_freq, save_model=args.save_model, beta=args.beta,
          nproj=args.nproj, loss_goal=args.loss_goal, acc_goal=args.acc_goal, abridged_size=args.abridged_size,
-         seed=args.seed, scaling=args.scaling)
+         seed=args.seed, scaling=args.scaling, nfilter=args.nfilter)
