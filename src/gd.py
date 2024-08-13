@@ -77,7 +77,7 @@ class AcD(torch.optim.Optimizer):
 
 
 def main(dataset: str, arch_id: str, loss: str, opt: str, lr: float, max_steps: int, mode: str="global_scaling",  neigs: int = 0, 
-         physical_batch_size: int = 5000, eig_freq: int = -1, iterate_freq: int = -1, save_freq: int = -1,
+         physical_batch_size: int = 2000, eig_freq: int = -1, iterate_freq: int = -1, save_freq: int = -1,
          save_model: bool = False, beta: float = 0.0, nproj: int = 0,
          loss_goal: float = None, acc_goal: float = None, abridged_size: int = 5000, seed: int = 0, scaling: float = 1.0, nfilter: int = 10):
     directory = get_gd_directory(dataset, lr, arch_id, seed, opt, loss, beta)
@@ -92,7 +92,7 @@ def main(dataset: str, arch_id: str, loss: str, opt: str, lr: float, max_steps: 
 
     torch.manual_seed(seed)
     network = load_architecture(arch_id, dataset).to(device)
-    if mode != 'global_scaling' and scaling !=1.0:
+    if not (mode == 'global_scaling' and scaling ==1.0):
         pretrained_dict = torch.load(f"{directory}/snapshot_3k")
         network.load_state_dict(pretrained_dict)
 
