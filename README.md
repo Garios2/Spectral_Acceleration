@@ -43,6 +43,11 @@ python src/gd.py cifar10-20k fc-tanh  mse  0.01 100000 --acc_goal 0.99 --neigs 2
 
 ![Minion](comparation_2.0_top20_zoom_in.svg)
 
+下图表示了使用fc-tanh网络训练整个cifar10数据集的表现，在lr=0.02的情况下：
+
+![Minion](comparation_1.5_top20.svg)
+
+非常欣慰的是这个加速的结果始终是 绿色>黄色>红色
 
 ## 主要函数
 
