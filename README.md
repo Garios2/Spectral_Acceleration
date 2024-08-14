@@ -52,3 +52,25 @@ python src/gd.py cifar10-20k fc-tanh  mse  0.01 100000 --acc_goal 0.99 --neigs 2
 ## 主要函数
 
 主要实现加速的类是`gd.py`中的`class AcD`， 简单重写了一个Optimizer类来使用。
+
+## Sharpness Dynamics 的研究
+
+这里展示一下这几种scaling方法对模型Sharpness的影响，在这里我们会指出，在这个方面，flat_scaling_v1 flat_scaling_v2 的差别非常之大。注意，以下的实验都是先在不做任何操作的实验上跑3000步，再将优化策略换成上述三类来进行比较。
+
+首先，我们查看fc-tanh在Cifar10全部数据上训练的结果，此处我们不做任何操作，让模型训练到train_acc到0.8的时候结束：
+<img src="results/cifar10/fc-tanh/seed_0/mse/gd/lr_0.02/figures/sharpness_flow_original_1.0.png" width="800" height="600" align="middle">
+
+其中上面的图代表train loss，下面的代表前20大的eigenvalue值相对于iteration的演化。这一演示比较常见，接下来我们分别画出在3000步的时候换成三种不同的优化策略后的train loss情况（绿色）以及eigenvalue情况：
+
+首先下面第一个是global scaling 1.5倍，即直接将步长增大1.5倍：这一效果比较常见，会产生比较大的Catapults，并且这个过程可以看作是一个One-step Warmup，所以说对于原先的加速了一点也正常。
+<img src="results/cifar10/fc-tanh/seed_0/mse/gd/lr_0.02/figures/sharpness_flow_global_scaling_1.5.png" width="800" height="600" align="middle">
+
+接下来第二个是flat scaling v2 1.5倍，v2所使用的策略是将top20个eigenvalue的方向保持原步长更新，而剩余的其他方向的更新步长增大1.5倍：可以看到这个方法的好处非常明显，首先由于在高频步长保持原本大小使得不会出现很大的Catapults，即Spike不会出现，而且看变化过后的eigenvalue dynamics和不做改变的run 基本没什么区别。细小的Catapults一样会出现，这是一种**无痛加速**的方法
+<img src="results/cifar10/fc-tanh/seed_0/mse/gd/lr_0.02/figures/sharpness_flow_flat_scaling_v2_1.5.png" width="800" height="600" align="middle">
+
+最后是flat scaling v1 1.5倍，v1所使用的策略是将top20的eigenvalue的方向停止更新，（他们的步长直接设为0），只更新剩余方向，并加速1.5倍：这个方法在eigenvalue视角下和其他方法有很大的不同。根据下图，这个方法能延长Progressive Sharpenning（PS）阶段，或者直接让模型从EoS阶段回到PS阶段，loss会在改变的一段时间内重新平滑的单调下降，这意味着，**这个方法把MSS提高了不少，并且在更快降低loss的同时也很快的在增大Sharpness及其他eigenvalue**。
+<img src="results/cifar10/fc-tanh/seed_0/mse/gd/lr_0.02/figures/sharpness_flow_flat_scaling_v1_1.5.png" width="800" height="600" align="middle">
+
+## Leading eigendirection发生在哪
+
+如果我们要真正使用这种加速方式，就一定要能够实现快速的求出前几个eigenvalue的方向，才能更快的求出flat_matrix。

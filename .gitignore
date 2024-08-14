@@ -5,4 +5,6 @@ demo.py
 .DS_Store
 .idea
 data/
-results
+results/*
+!results/cifar10/fc-tanh/seed_0/mse/gd/lr_0.02/figures
+!results/cifar10-20k/fc-tanh/seed_0/mse/gd/lr_0.05/figures
