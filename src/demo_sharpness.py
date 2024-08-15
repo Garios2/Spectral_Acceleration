@@ -22,7 +22,7 @@ mode='flat_scaling_v2'
 
 if mode != 'original':
     scaling=1.5
-    nfilter=20
+    nfilter=40
     save_name = "{}_{}_top_{}_step".format(mode, scaling,nfilter)
     gd_train_loss_flat = torch.load(f"{gd_directory}/train_loss_{save_name}")
     train_loss_flat = torch.cat((torch.tensor([np.nan]*3000), gd_train_loss_flat))
@@ -49,9 +49,17 @@ for i in range(20):
             axs[1].plot(torch.arange(len(gd_sharpness)) * gd_eig_freq, gd_sharpness, color="red",label="10th largerst elgenval")
 
     else:
-        axs[1].plot(torch.arange(len(pre_sharpness)) * gd_eig_freq, pre_sharpness, color=cmap(i/20))
+        axs[1].plot(torch.arange(len(pre_sharpness)) * gd_eig_freq, pre_sharpness, color=cmap(i/nfilter))
         if mode != 'original':
-            axs[1].plot(torch.arange(len(gd_sharpness)) * gd_eig_freq, gd_sharpness, color=cmap(i/20))
+            axs[1].plot(torch.arange(len(gd_sharpness)) * gd_eig_freq, gd_sharpness, color=cmap(i/nfilter))
+
+if nfilter>20:
+    for i in range(nfilter-20):
+        gd_sharpness = torch.cat((torch.tensor([np.nan]*30), torch.load(f"{gd_directory}/eigs_{save_name}")[:,i+20]))
+        axs[1].plot(torch.arange(len(gd_sharpness)) * gd_eig_freq, gd_sharpness, color=cmap((20+i)/nfilter))
+
+
+
 
 if mode != 'original':
     axs[1].axvline(3000, linestyle='dotted',color='red')

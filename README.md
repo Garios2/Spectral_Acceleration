@@ -38,7 +38,7 @@ python src/gd.py cifar10-20k fc-tanh  mse  0.01 100000 --acc_goal 0.99 --neigs 2
 
 ![Minion](comparation_2.0_top20.svg)
 
-注意到3000步（蓝色虚线处）增大步长之后和有很大的spike（如果步长增大倍数为3甚至更大的时候，是肯定会发散的），特别是红色（即朴素的增大步长），zoom in之后(下图)，发现确实如此，绿色和黄色这种屏蔽了特征值高的方向的更新会减弱这种spike的出现。
+注意到3000步（蓝色虚线处）增大步长之后和有很大的spike（如果步长增大倍数为3甚至更大的时候，是肯定会发散的），特别是红色（即朴素的增大步长），zoom in之后(下图)，发现确实如此，绿色和黄色这种屏蔽了特征值高的方向的更新会减弱这种spike的出现。说明这个spike一定是高特征值方向的更新带来的。
 
 
 ![Minion](comparation_2.0_top20_zoom_in.svg)
@@ -71,9 +71,31 @@ python src/gd.py cifar10-20k fc-tanh  mse  0.01 100000 --acc_goal 0.99 --neigs 2
 最后是flat scaling v1 1.5倍，v1所使用的策略是将top20的eigenvalue的方向停止更新，（他们的步长直接设为0），只更新剩余方向，并加速1.5倍：这个方法在eigenvalue视角下和其他方法有很大的不同。根据下图，这个方法能延长Progressive Sharpenning（PS）阶段，或者直接让模型从EoS阶段回到PS阶段，loss会在改变的一段时间内重新平滑的单调下降，这意味着，**这个方法把MSS提高了不少，并且在更快降低loss的同时也很快的在增大Sharpness及其他eigenvalue**。
 <img src="results/cifar10/fc-tanh/seed_0/mse/gd/lr_0.02/figures/sharpness_flow_flat_scaling_v1_1.5_top20.png" width="800" height="600" align="middle">
 
-捋一遍原因：因为高频（Dom）的作用如果只是贡献了振荡的话，完全可以在上面不更新，导致了很奇怪的事情发生
+捋一遍原因：因为高频（Dom）的作用如果只是贡献了振荡的话，完全可以在上面不更新，导致了很奇怪的事情发生:
+
++ 最大的一些特征值仍然在上升，可能被认为是特征值上升和loss平滑下降是必须同时发生的。
++ 什么时候loss重新开始抖动： 模型在后期也会重新进入EoS，这肯定代表着有其他的会更新的方向的特征方向的特征值达到了MSS，这代表了这个方法使得更多的特征值变得更大。这从根本上
+
+以上都是跑的nfilter是20的，下面我也跑了nfilter是10或者40的情况。加速难道是nfilter越大越好？道理上肯定不是，因为：
++ 如果nfilter很大，在一些没有饱和的方向就得不到加速或者放弃更新了，这肯定是相当于减速的。
++ 如果要最精确的控制nfilter的话，这肯定是动态的，即大于MSS的eigendirection就可以被停止了，这是一个动态的投影矩阵。
++ 更深度的问题在于，在mask掉的eigendirection上，在接下来的更新中他们的eigenvalue还会上升，这说明了eigenvalue的增大（Progressive Sharpening）和梯度在之对应的eigenvector上的更新没有什么关系。是和loss的快速下降有关系？现在是如下关系：
+    + 在eigenvalue大于MSS的方向，如果进行更新，就会出现Catapults，相应的会有loss spike，可能会有EOS的经典现象比如Oscillation存在，而且一直更新的话eigenvalue会维持在MSS值附近。
+    + 在eigenvalue大于MSS的方向，如果不进行更新，那么在这个方向的eigenvalue居然会一直增大，因为catapults不会发生，因此并不会出现Self-stabilization来使得eigenvalue降低，这个增大会持续到其他在更新的eigendirection的eigenvalue大于MSS之后，模型重新会进入EOS。(比如设置nfilter为20的话，前20大的eigenvalue会一直单调增大，直到第21大的eigenvalue大于MSS)
+
+综上所述，我们应该使用动态的投影矩阵，而且我认为**我们可以做一个warmup**， 也就是说我们在增大步长，而且是每当某一个方向的eigenvalue撞到warmup MSS的时候就把这个方向给停了。**这是一个很新的想法，同时兼顾了投影矩阵的策略以及步长scaler的选取**。
+
+问题是：**当选取任意一种训练策略的时候，真的是当这个方向的eigenvalue到MSS之后就学不到东西（下降不了loss）了吗？增大或者减小步长呢？**对饱和方向来说，减小步长和步长直接设为0有什么区别吗？
+
+
+<img src="results/cifar10/fc-tanh/seed_0/mse/gd/lr_0.02/figures/sharpness_flow_flat_scaling_v1_1.5_top10.png" width="800" height="600" align="middle">
+
+在研究了nfilter的个数带来的问题之后，还有一个重要问题是scaler大小的选取，在此我们先使用比较理想的warmup方式来看看效果如何
+
 
 ## Leading eigendirection发生在哪
 
 如果我们要真正使用这种加速方式，就一定要能够实现快速的求出前几个eigenvalue的方向，才能更快的求出flat_matrix。
+
+首先我们得知道梯度分解为特征方向后每个方向的含量为多少
 
