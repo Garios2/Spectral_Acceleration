@@ -85,7 +85,7 @@ python src/gd.py cifar10-20k fc-tanh  mse  0.01 100000 --acc_goal 0.99 --neigs 2
 
 综上所述，我们应该使用动态的投影矩阵，而且我认为**我们可以做一个warmup**， 也就是说我们在增大步长，而且是每当某一个方向的eigenvalue撞到warmup MSS的时候就把这个方向给停了。**这是一个很新的想法，同时兼顾了投影矩阵的策略以及步长scaler的选取**。
 
-问题是：**当选取任意一种训练策略的时候，真的是当这个方向的eigenvalue到MSS之后就学不到东西（下降不了loss）了吗？增大或者减小步长呢？**对饱和方向来说，减小步长和步长直接设为0有什么区别吗？
+问题是：**当选取任意一种训练策略的时候，真的是当这个方向的eigenvalue到MSS之后就学不到东西（下降不了loss）了吗？增大或者减小步长呢**？ 对饱和方向来说，减小步长和步长直接设为0有什么区别吗？
 
 
 <img src="results/cifar10/fc-tanh/seed_0/mse/gd/lr_0.02/figures/sharpness_flow_flat_scaling_v1_1.5_top10.png" width="800" height="600" align="middle">
