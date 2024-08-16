@@ -24,11 +24,21 @@ python src/gd.py cifar10-20k fc-tanh  mse  0.01 100000 --acc_goal 0.99 --neigs 2
 ``` 
 我就会得到**中间神经网络**开始，步长变为原本的1.5倍的训练结果，因为是global_scaling，我只会简单的将步长乘1.5倍
 
-如果我又运行了：
+如果又运行了：
 ```
 python src/gd.py cifar10-20k fc-tanh  mse  0.01 100000 --acc_goal 0.99 --neigs 20  --eig_freq 100 --mode flat_scaling_v1 --scaling 1.5 --nfilter 20
 ``` 
 此时我会从**中间神经网络**开始，做一个加速，这种加速会将最大的`nfilter`个特征值的特征方向**停止**， 仅更新其他的特征方向，并且在其他的特征方向上步长乘1.5倍。此为flat_scaling_v1 的效果，如果选择flat_scaling_v2， 就会使最大的`nfilter`个特征值的特征方向**保持1倍步长**，其他的特征方向上步长乘1.5倍。
+
+这个加速的做法就是：
+$$
+\theta_{t+1} = \theta_{t} - \eta \textcolor{blue}{\alpha} \textcolor{blue}{P} \nabla L(\theta)
+$$
+Where alpha is a scaler and:
+$$
+\textcolor{blue}{P}  = I - \sum_{i=0}^{topN} u_i u_i ^{T}
+$$
+这一方法是把特征值高（topN大的特征值）的特征方向的更新**停止（停止Bouncing的行为）**，并把特征值低的方向通过一个scaler $\alpha$ 加速。
 
 当我逐一运行了以上代码，就可以直接再运行`demo.py`就能直接的比较三种加速相比于原本的情况的loss curve了，如果实验设置有变化可以通过修改`demo.py`来展示.
 
