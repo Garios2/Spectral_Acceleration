@@ -30,6 +30,25 @@ python src/gd.py cifar10-20k fc-tanh  mse  0.01 100000 --acc_goal 0.99 --neigs 2
 ``` 
 此时我会从**中间神经网络**开始，做一个加速，这种加速会将最大的`nfilter`个特征值的特征方向**停止**， 仅更新其他的特征方向，并且在其他的特征方向上步长乘1.5倍。此为flat_scaling_v1 的效果，如果选择flat_scaling_v2， 就会使最大的`nfilter`个特征值的特征方向**保持1倍步长**，其他的特征方向上步长乘1.5倍。
 
+在Spectral的角度下看梯度下降，把Hessian和Gradient都在谱空间（Hesssian特征向量）上分解。
+
+**Intuition**: 首先，基于GD更新的loss的Quadratic Taylor Approximation如下：
+
+$$
+L(\theta_{t+1}) - L(\theta_t) \approx \eta \nabla L(\theta_t)(\theta_{t+1}-\theta_t) + \frac{1}{2}  (\theta_{t+1}-\theta_t)^T \nabla^2L(\theta_t) (\theta_{t+1}-\theta_t)
+$$
+$$
+=-\eta  ||\nabla L(\theta_t)||_2^2 + \frac{\eta^2}{2} \nabla L(\theta_t)^T \nabla^2L(\theta_t) \nabla L(\theta_t)
+$$
+在这里我们以Spectral的视角看待这个过程，首先对于Hessian矩阵做谱分解：$\nabla^2L(\theta) = \sum_{i=0}^n \lambda_i(\theta) u_i(\theta) u_i(\theta)^T$， 然后我们对每一次的梯度以这一步的Hessian的特征向量为基做分解：$\nabla L(\theta) = \sum_{i=0}^{n}c_i (\theta)u_i(\theta)$， 其中$c_i(\theta)$是标量，表达的是当前梯度中的第$i$个特征向量的占比。把这两个谱分解带入上式，则有：
+$$
+L(\theta_{t+1}) - L(\theta_t) \approx -\eta \sum_{i=0}^{n} c_i(\theta_t)^2 + \frac{\eta^2}{2}\sum_{i=0}^{n} c_i(\theta_t)^2 \lambda_i(\theta_t)
+$$
+$$
+= \sum_{i=0}^{n}c_i(\theta_t)^2\textcolor{red}{(\frac{\eta^2}{2}\lambda_i(\theta_t) - \eta)}
+$$
+从上面的分析看出，任何一个大于$2/\eta$的特征值的特征方向的更新都不能对Loss下降带来任何好处，这是基于EOS的谱视角所带来的观察。
+
 这个加速的做法就是：
 $$
 \theta_{t+1} = \theta_{t} - \eta \textcolor{blue}{\alpha} \textcolor{blue}{P} \nabla L(\theta)
