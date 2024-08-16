@@ -38,7 +38,7 @@ Where alpha is a scaler and:
 $$
 \textcolor{blue}{P}  = I - \sum_{i=0}^{topN} u_i u_i ^{T}
 $$
-这一方法是把特征值高（topN大的特征值）的特征方向的更新**停止（停止Bouncing的行为）**，并把特征值低的方向通过一个scaler $\alpha$ 加速。
+这一方法是把特征值高（topN大的特征值）的特征方向的更新**停止（停止Bouncing的行为）**，并把特征值低的方向通过一个scaler $\alpha$ 加速。这是一个即插即用的方法，因为在所有的基于梯度的方法中都可以在梯度向量前乘上这个矩阵。
 
 当我逐一运行了以上代码，就可以直接再运行`demo.py`就能直接的比较三种加速相比于原本的情况的loss curve了，如果实验设置有变化可以通过修改`demo.py`来展示.
 
