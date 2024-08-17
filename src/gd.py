@@ -28,8 +28,8 @@ class AcD(torch.optim.Optimizer):
     flat_scaling_v1 高频速度设为0 低频加速scaler倍
     flat_scaling_v2 高频速度设为0 低频加速scaler倍
     '''
-    def __init__(self, params, lr, mode=None, scaler=1.5):
-        defaults = dict(lr=lr, mode=mode, scaler=scaler)
+    def __init__(self, params, lr, mode=None, scaler=1.5, momentum=0):
+        defaults = dict(lr=lr, mode=mode, scaler=scaler, momentum=momentum)
         super(AcD, self).__init__(params, defaults)
     
     def step(self, flat_matrix=None):
@@ -53,6 +53,15 @@ class AcD(torch.optim.Optimizer):
                 if param.grad is None:
                     continue
                 grad = param.grad.data
+
+                state = self.state[param]
+                if 'momentum_buffer' not in state:
+                    buf = state['momentum_buffer'] = torch.clone(grad).detach()
+                else:
+                    buf = state['momentum_buffer']
+                    buf.mul_(group['momentum']).add_(grad)
+                grad = buf
+
                 #print("shape of grad:"+str(grad.shape))
                 len_now = len(grad.view(-1))
                 # 根据模式修改梯度
@@ -93,7 +102,7 @@ def main(dataset: str, arch_id: str, loss: str, opt: str, lr: float, max_steps: 
     torch.manual_seed(seed)
     network = load_architecture(arch_id, dataset).to(device)
     if not (mode == 'global_scaling' and scaling ==1.0):
-        pretrained_dict = torch.load(f"{directory}/snapshot_3k")
+        pretrained_dict = torch.load(f"{directory}/snapshot_700")
         network.load_state_dict(pretrained_dict)
 
 
@@ -103,7 +112,7 @@ def main(dataset: str, arch_id: str, loss: str, opt: str, lr: float, max_steps: 
     torch.manual_seed(7)
     projectors = torch.randn(nproj, len(parameters_to_vector(network.parameters())))
     #optimizer = get_gd_optimizer(network.parameters(), opt, lr, beta)
-    optimizer = AcD(params=network.parameters(), lr=lr, mode=mode,scaler=scaling)
+    optimizer = AcD(params=network.parameters(), lr=lr, mode=mode,scaler=scaling, momentum=beta)
 
     train_loss, test_loss, train_acc, test_acc = \
         torch.zeros(max_steps), torch.zeros(max_steps), torch.zeros(max_steps), torch.zeros(max_steps)
@@ -126,6 +135,10 @@ def main(dataset: str, arch_id: str, loss: str, opt: str, lr: float, max_steps: 
             eigs[step // eig_freq, :], eigvecs[step // eig_freq, :,:] = get_hessian_eigenvalues(network, loss_fn, abridged_train, neigs=neigs,
                                                                 physical_batch_size=physical_batch_size)
             print("eigenvalues: ", eigs[step//eig_freq, :])
+
+            if float(eigs[step//eig_freq, 0]) >(2*(1+beta)/lr) and mode=='global_scaling' and scaling==1.0:
+                torch.save(network.state_dict(), f"{directory}/snapshot_{step}_1")
+            
             #param_flow[step // eig_freq,:] = parameters_to_vector(network.parameters())
             gradients[step // eig_freq,:] = compute_gradient(network, loss_fn,train_dataset)
             flat_matrix = compute_flat_matrix(nfilter=nfilter,eigvecs=eigvecs[step // eig_freq, :,:])
@@ -141,8 +154,7 @@ def main(dataset: str, arch_id: str, loss: str, opt: str, lr: float, max_steps: 
 
         print(f"current:{mode}\t{scaling}\t{step}\t{train_loss[step]:.3f}\t{train_acc[step]:.3f}\t{test_loss[step]:.3f}\t{test_acc[step]:.3f}")
         
-        if step == 3000 and mode=='global_scaling' and scaling==1.0:
-            torch.save(network.state_dict(), f"{directory}/snapshot_3k")
+
 
         if (loss_goal != None and train_loss[step] < loss_goal) or (acc_goal != None and train_acc[step] > acc_goal):
             break
@@ -175,7 +187,7 @@ if __name__ == "__main__":
                         help="which scaling type", default="global_scaling")
     parser.add_argument("--seed", type=int, help="the random seed used when initializing the network weights",
                         default=0)
-    parser.add_argument("--beta", type=float, help="momentum parameter (used if opt = polyak or nesterov)")
+    parser.add_argument("--beta", type=float, help="momentum parameter (used if opt = polyak or nesterov)",default=0.0)
     parser.add_argument("--physical_batch_size", type=int,
                         help="the maximum number of examples that we try to fit on the GPU at once", default=2000)
     parser.add_argument("--acc_goal", type=float,
