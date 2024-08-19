@@ -123,11 +123,14 @@ def main(dataset: str, arch_id: str, loss: str, opt: str, lr: float, max_steps: 
    # param_flow = torch.zeros(max_steps // eig_freq if eig_freq >= 0 else 0, len_of_param)
     #flat_matrix = torch.eye(len_of_param)
     flat_matrix = None
-    flag=1
+    flag=0
     for step in range(max_steps): 
         train_loss[step], train_acc[step] = compute_losses(network, [loss_fn, acc_fn], train_dataset,
                                                            physical_batch_size)
         test_loss[step], test_acc[step] = compute_losses(network, [loss_fn, acc_fn], test_dataset, physical_batch_size)
+
+        if step>1 and train_loss[step]>train_loss[step-1]:
+            flag=1
 
         if float(eigs[step//eig_freq, 0]) >(2*(1+beta)/lr) and mode=='global_scaling' and step == 1000:
             torch.save(network.state_dict(), f"{directory}/snapshot_{step}")
@@ -138,14 +141,12 @@ def main(dataset: str, arch_id: str, loss: str, opt: str, lr: float, max_steps: 
             eigs[step // eig_freq, :], eigvecs[step // eig_freq, :,:] = get_hessian_eigenvalues(network, loss_fn, abridged_train, neigs=neigs,
                                                                 physical_batch_size=physical_batch_size)
             print("eigenvalues: ", eigs[step//eig_freq, :])
-            """
-            if float(eigs[step//eig_freq, 0]) >(2*(1+beta)/lr) and mode=='global_scaling' and scaling==1.0 and flag == 1:
-                torch.save(network.state_dict(), f"{directory}/snapshot_{step}_1")
-                flag=0            
-            """
-            #param_flow[step // eig_freq,:] = parameters_to_vector(network.parameters())
+
             gradients[step // eig_freq,:] = compute_gradient(network, loss_fn,train_dataset)
+            if flag==1:
+                nfilter = min(nfilter+5, neigs)
             flat_matrix = compute_flat_matrix(nfilter=nfilter,eigvecs=eigvecs[step // eig_freq, :,:])
+            flag=0
             
         if iterate_freq != -1 and step % iterate_freq == 0:
             iterates[step // iterate_freq, :] = projectors.mv(parameters_to_vector(network.parameters()).cpu().detach())
@@ -156,7 +157,7 @@ def main(dataset: str, arch_id: str, loss: str, opt: str, lr: float, max_steps: 
                                    ("train_loss", train_loss[:step]), ("test_loss", test_loss[:step]),
                                    ("train_acc", train_acc[:step]), ("test_acc", test_acc[:step])])
 
-        print(f"current:{mode}\t{scaling}\t{step}\t{train_loss[step]:.3f}\t{train_acc[step]:.3f}\t{test_loss[step]:.3f}\t{test_acc[step]:.3f}")
+        print(f"current:{mode}\t{scaling}\t{step}\t{train_loss[step]:.3f}\t{train_acc[step]:.3f}\t{test_loss[step]:.3f}\t{test_acc[step]:.3f}\t nfilter:{nfilter}")
         
 
 
@@ -168,7 +169,7 @@ def main(dataset: str, arch_id: str, loss: str, opt: str, lr: float, max_steps: 
             loss = loss_fn(network(X.to(device)), y.to(device)) / len(train_dataset)
             loss.backward()
         optimizer.step(flat_matrix=flat_matrix)
-    save_name = "{}_{}_top_{}".format(mode, scaling,nfilter)
+    save_name = "bulk_{}_{}_top_{}".format(mode, scaling,nfilter)
     save_files_at_nstep(directory,
                      [("eigs", eigs[:(step + 1) // eig_freq]), ("iterates", iterates[:(step + 1) // iterate_freq]),
                      ("grads", gradients[:(step + 1) // eig_freq]),("eigvecs",eigvecs[:(step + 1) // eig_freq]),
