@@ -16,7 +16,7 @@ gdm_lr = gd_lr/10
 compare_flat_scaling = 1
 compare_gd = 1
 compare_gdm=1
-compare_bulk_gd = 0
+compare_bulk_gd = 1
 
 #gd_directory = f"{environ['RESULTS']}/{dataset}/{arch}/seed_0/{loss}/gd/lr_{gd_lr}"
 fig, axs = plt.subplots(2, 1, figsize=(10, 10), dpi=100, sharex=True)
@@ -96,7 +96,7 @@ if compare_flat_scaling==1:
 if compare_bulk_gd ==1:
     mode_bulk='flat_scaling_v1'
     scaling_bulk=1.0
-    nfilter_bulk=40
+    nfilter_bulk=50
     save_name_bulk = "bulk_{}_{}_top_{}_step".format(mode_bulk, scaling_bulk,nfilter_bulk)
     gd_train_loss_bulk = torch.load(f"{gd_directory}/train_loss_{save_name_bulk}")
     train_loss_bulk = torch.cat((torch.tensor([np.nan]*middlePoint), gd_train_loss_bulk))
@@ -104,9 +104,9 @@ if compare_bulk_gd ==1:
 
     for i in range(5):
         gd_sharpness = torch.load(f"{gd_directory}/eigs_{save_name_bulk}")[:,i]
-        axs[1].plot(middlePoint+torch.arange(len(gd_sharpness)) * gd_eig_freq, gd_sharpness, color="purple")
+        axs[1].plot(middlePoint+torch.arange(len(gd_sharpness)) * gd_eig_freq, gd_sharpness, color="red")
         if i== 4:
-            axs[1].plot(middlePoint+torch.arange(len(gd_sharpness)) * gd_eig_freq, gd_sharpness, color="purple",label=f"GD_{mode_bulk}_{scaling_bulk}_top5")
+            axs[1].plot(middlePoint+torch.arange(len(gd_sharpness)) * gd_eig_freq, gd_sharpness, color="red",label=f"GD_{mode_bulk}_{scaling_bulk}_top5")
 
 
 
