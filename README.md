@@ -132,3 +132,19 @@ $$
 
 首先我们得知道梯度分解为特征方向后每个方向的含量为多少
 
+## Todo
+momentum参数0.99就更好了？
+gradient norm是否平滑
+
+为什么GDM能近似一个Bulk-GD
+能不能给出一个intuition来找hessian或者这个方法的candidate
+
+momentum beta变大（接近1）（优化：beta warmup）和bulk-GD是不是一个效果？
+
+但是momentum不能加速低频。
+
+momentum并没有filter的过程，但是为什么能够。
+
+SGD ， resnet 迁移
+
+分层算hessian，在拼起来
