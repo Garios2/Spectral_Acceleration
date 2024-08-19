@@ -118,8 +118,8 @@ def main(dataset: str, arch_id: str, loss: str, opt: str, lr: float, max_steps: 
     iterates = torch.zeros(max_steps // iterate_freq if iterate_freq > 0 else 0, len(projectors))
     
     eigs = torch.zeros(max_steps // eig_freq if eig_freq >= 0 else 0, neigs)
-    eigvecs = torch.zeros(max_steps // eig_freq if eig_freq >= 0 else 0, len_of_param, neigs)
-    gradients = torch.zeros(max_steps // eig_freq if eig_freq >= 0 else 0, len_of_param)
+    eigvecs = torch.zeros(len_of_param, neigs)
+    #gradients = torch.zeros(max_steps // eig_freq if eig_freq >= 0 else 0, len_of_param)
    # param_flow = torch.zeros(max_steps // eig_freq if eig_freq >= 0 else 0, len_of_param)
     #flat_matrix = torch.eye(len_of_param)
     flat_matrix = None
@@ -138,14 +138,14 @@ def main(dataset: str, arch_id: str, loss: str, opt: str, lr: float, max_steps: 
 
         # 其实是每隔eig_freq步才检查一次flat_matrix，然后再接下来eig_freq步内都使用同一个matrix来过滤
         if eig_freq != -1 and step % eig_freq == 0:
-            eigs[step // eig_freq, :], eigvecs[step // eig_freq, :,:] = get_hessian_eigenvalues(network, loss_fn, abridged_train, neigs=neigs,
+            eigs[step // eig_freq, :], eigvecs[ :,:] = get_hessian_eigenvalues(network, loss_fn, abridged_train, neigs=neigs,
                                                                 physical_batch_size=physical_batch_size)
             print("eigenvalues: ", eigs[step//eig_freq, :])
 
-            gradients[step // eig_freq,:] = compute_gradient(network, loss_fn,train_dataset)
+            #gradients[step // eig_freq,:] = compute_gradient(network, loss_fn,train_dataset)
             if flag==1:
                 nfilter = min(nfilter+5, neigs)
-            flat_matrix = compute_flat_matrix(nfilter=nfilter,eigvecs=eigvecs[step // eig_freq, :,:])
+            flat_matrix = compute_flat_matrix(nfilter=nfilter,eigvecs=eigvecs[:,:])
             flag=0
             
         if iterate_freq != -1 and step % iterate_freq == 0:
@@ -153,7 +153,6 @@ def main(dataset: str, arch_id: str, loss: str, opt: str, lr: float, max_steps: 
 
         if save_freq != -1 and step % save_freq == 0:
             save_files(directory, [("eigs", eigs[:step // eig_freq]), ("iterates", iterates[:step // iterate_freq]),
-                                    ("grads", gradients[:step // eig_freq]),("eigvecs",eigvecs[:step // eig_freq]),
                                    ("train_loss", train_loss[:step]), ("test_loss", test_loss[:step]),
                                    ("train_acc", train_acc[:step]), ("test_acc", test_acc[:step])])
 
@@ -172,7 +171,6 @@ def main(dataset: str, arch_id: str, loss: str, opt: str, lr: float, max_steps: 
     save_name = "bulk_{}_{}_top_{}".format(mode, scaling,nfilter)
     save_files_at_nstep(directory,
                      [("eigs", eigs[:(step + 1) // eig_freq]), ("iterates", iterates[:(step + 1) // iterate_freq]),
-                     ("grads", gradients[:(step + 1) // eig_freq]),("eigvecs",eigvecs[:(step + 1) // eig_freq]),
                       ("train_loss", train_loss[:step + 1]), ("test_loss", test_loss[:step + 1]),
                       ("train_acc", train_acc[:step + 1]), ("test_acc", test_acc[:step + 1])], step=save_name)
     if save_model:

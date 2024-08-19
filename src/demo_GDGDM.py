@@ -16,7 +16,7 @@ gdm_lr = gd_lr/10
 compare_flat_scaling = 1
 compare_gd = 1
 compare_gdm=1
-compare_bulk_gd = 1
+compare_bulk_gd = 0
 
 #gd_directory = f"{environ['RESULTS']}/{dataset}/{arch}/seed_0/{loss}/gd/lr_{gd_lr}"
 fig, axs = plt.subplots(2, 1, figsize=(10, 10), dpi=100, sharex=True)
