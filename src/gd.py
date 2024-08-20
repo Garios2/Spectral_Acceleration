@@ -85,7 +85,7 @@ class AcD(torch.optim.Optimizer):
 
 
 def main(dataset: str, arch_id: str, loss: str, opt: str, lr: float, max_steps: int, mode: str="global_scaling",  neigs: int = 0, 
-         physical_batch_size: int = 2000, eig_freq: int = -1, iterate_freq: int = -1, save_freq: int = -1,
+         physical_batch_size: int = 6000, eig_freq: int = -1, iterate_freq: int = -1, save_freq: int = -1,
          save_model: bool = False, beta: float = 0.0, nproj: int = 0,
          loss_goal: float = None, acc_goal: float = None, abridged_size: int = 5000, seed: int = 0, scaling: float = 1.0, nfilter: int = 10):
     directory = get_gd_directory(dataset, lr, arch_id, seed, opt, loss, beta)
@@ -118,7 +118,8 @@ def main(dataset: str, arch_id: str, loss: str, opt: str, lr: float, max_steps: 
     iterates = torch.zeros(max_steps // iterate_freq if iterate_freq > 0 else 0, len(projectors))
     
     eigs = torch.zeros(max_steps // eig_freq if eig_freq >= 0 else 0, neigs)
-    eigvecs = torch.zeros(max_steps // eig_freq if eig_freq >= 0 else 0, len_of_param, neigs)
+    #eigvecs = torch.zeros(max_steps // eig_freq if eig_freq >= 0 else 0, len_of_param, neigs)
+    eigvecs = torch.zeros( len_of_param, neigs)
     gradients = torch.zeros(max_steps // eig_freq if eig_freq >= 0 else 0, len_of_param)
    # param_flow = torch.zeros(max_steps // eig_freq if eig_freq >= 0 else 0, len_of_param)
     #flat_matrix = torch.eye(len_of_param)
@@ -135,7 +136,7 @@ def main(dataset: str, arch_id: str, loss: str, opt: str, lr: float, max_steps: 
 
         # 其实是每隔eig_freq步才检查一次flat_matrix，然后再接下来eig_freq步内都使用同一个matrix来过滤
         if eig_freq != -1 and step % eig_freq == 0:
-            eigs[step // eig_freq, :], eigvecs[step // eig_freq, :,:] = get_hessian_eigenvalues(network, loss_fn, abridged_train, neigs=neigs,
+            eigs[step // eig_freq, :], eigvecs[ :,:] = get_hessian_eigenvalues(network, loss_fn, abridged_train, neigs=neigs,
                                                                 physical_batch_size=physical_batch_size)
             print("eigenvalues: ", eigs[step//eig_freq, :])
             """
@@ -145,14 +146,14 @@ def main(dataset: str, arch_id: str, loss: str, opt: str, lr: float, max_steps: 
             """
             #param_flow[step // eig_freq,:] = parameters_to_vector(network.parameters())
             gradients[step // eig_freq,:] = compute_gradient(network, loss_fn,train_dataset)
-            flat_matrix = compute_flat_matrix(nfilter=nfilter,eigvecs=eigvecs[step // eig_freq, :,:])
+            flat_matrix = compute_flat_matrix(nfilter=nfilter,eigvecs=eigvecs[:,:])
             
         if iterate_freq != -1 and step % iterate_freq == 0:
             iterates[step // iterate_freq, :] = projectors.mv(parameters_to_vector(network.parameters()).cpu().detach())
 
         if save_freq != -1 and step % save_freq == 0:
             save_files(directory, [("eigs", eigs[:step // eig_freq]), ("iterates", iterates[:step // iterate_freq]),
-                                    ("grads", gradients[:step // eig_freq]),("eigvecs",eigvecs[:step // eig_freq]),
+                                    ("grads", gradients[:step // eig_freq]),
                                    ("train_loss", train_loss[:step]), ("test_loss", test_loss[:step]),
                                    ("train_acc", train_acc[:step]), ("test_acc", test_acc[:step])])
 
@@ -171,7 +172,7 @@ def main(dataset: str, arch_id: str, loss: str, opt: str, lr: float, max_steps: 
     save_name = "{}_{}_top_{}".format(mode, scaling,nfilter)
     save_files_at_nstep(directory,
                      [("eigs", eigs[:(step + 1) // eig_freq]), ("iterates", iterates[:(step + 1) // iterate_freq]),
-                     ("grads", gradients[:(step + 1) // eig_freq]),("eigvecs",eigvecs[:(step + 1) // eig_freq]),
+                     ("grads", gradients[:(step + 1) // eig_freq]),
                       ("train_loss", train_loss[:step + 1]), ("test_loss", test_loss[:step + 1]),
                       ("train_acc", train_acc[:step + 1]), ("test_acc", test_acc[:step + 1])], step=save_name)
     if save_model:
@@ -193,7 +194,7 @@ if __name__ == "__main__":
                         default=0)
     parser.add_argument("--beta", type=float, help="momentum parameter (used if opt = polyak or nesterov)",default=0.0)
     parser.add_argument("--physical_batch_size", type=int,
-                        help="the maximum number of examples that we try to fit on the GPU at once", default=2000)
+                        help="the maximum number of examples that we try to fit on the GPU at once", default=6000)
     parser.add_argument("--acc_goal", type=float,
                         help="terminate training if the train accuracy ever crosses this value")
     parser.add_argument("--loss_goal", type=float, help="terminate training if the train loss ever crosses this value")

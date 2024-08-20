@@ -119,7 +119,7 @@ def main(dataset: str, arch_id: str, loss: str, opt: str, lr: float, max_steps: 
     
     eigs = torch.zeros(max_steps // eig_freq if eig_freq >= 0 else 0, neigs)
     eigvecs = torch.zeros(len_of_param, neigs)
-    #gradients = torch.zeros(max_steps // eig_freq if eig_freq >= 0 else 0, len_of_param)
+    gradients = torch.zeros(max_steps // eig_freq if eig_freq >= 0 else 0, len_of_param)
    # param_flow = torch.zeros(max_steps // eig_freq if eig_freq >= 0 else 0, len_of_param)
     #flat_matrix = torch.eye(len_of_param)
     flat_matrix = None
@@ -142,7 +142,7 @@ def main(dataset: str, arch_id: str, loss: str, opt: str, lr: float, max_steps: 
                                                                 physical_batch_size=physical_batch_size)
             print("eigenvalues: ", eigs[step//eig_freq, :])
 
-            #gradients[step // eig_freq,:] = compute_gradient(network, loss_fn,train_dataset)
+            gradients[step // eig_freq,:] = compute_gradient(network, loss_fn,train_dataset)
             if flag==1:
                 nfilter = min(nfilter+10, neigs)
             flat_matrix = compute_flat_matrix(nfilter=nfilter,eigvecs=eigvecs[:,:])
@@ -171,6 +171,7 @@ def main(dataset: str, arch_id: str, loss: str, opt: str, lr: float, max_steps: 
     save_name = "bulk_{}_{}_top_{}".format(mode, scaling,nfilter)
     save_files_at_nstep(directory,
                      [("eigs", eigs[:(step + 1) // eig_freq]), ("iterates", iterates[:(step + 1) // iterate_freq]),
+                      ("grads", gradients[:(step + 1) // eig_freq]),
                       ("train_loss", train_loss[:step + 1]), ("test_loss", test_loss[:step + 1]),
                       ("train_acc", train_acc[:step + 1]), ("test_acc", test_acc[:step + 1])], step=save_name)
     if save_model:

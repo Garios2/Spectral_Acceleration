@@ -13,11 +13,11 @@ scaling = 1.0
 momentum = "polyak"
 middlePoint=1000
 gdm_lr = gd_lr/10
-compare_flat_scaling = 1
+compare_flat_scaling = 0
 compare_gd = 1
 compare_gdm=1
 compare_bulk_gd = 1
-
+compare_gdm_another =1
 #gd_directory = f"{environ['RESULTS']}/{dataset}/{arch}/seed_0/{loss}/gd/lr_{gd_lr}"
 fig, axs = plt.subplots(2, 1, figsize=(10, 10), dpi=100, sharex=True)
 gd_directory = f"{environ['RESULTS']}/{dataset}/{arch}/seed_0/{loss}/gd/lr_{gd_lr}"
@@ -62,7 +62,20 @@ if compare_gdm ==1:
             axs[1].plot(torch.arange(len(gdm_sharpness)) * gd_eig_freq, gdm_sharpness, color="orange",label="GDM_top5")
     axs[1].axhline(2*(1.9) / gdm_lr, linestyle='dotted',label="MSS_GDM")
 
-
+if compare_gdm_another ==1:
+    gdm_directory = f"{environ['RESULTS']}/{dataset}/{arch}/seed_0/{loss}/{momentum}/lr_{gdm_lr/10}_beta_0.99"
+    mode='global_scaling'
+    scaling=1.0
+    nfilter=20
+    gdm_train_loss = torch.load(f"{gdm_directory}/train_loss_{save_name}")
+    axs[0].plot(gdm_train_loss,label=f"GDM,eta={gdm_lr}", color="grey")
+    save_name = "{}_{}_top_{}_step".format(mode, scaling,nfilter)
+    for i in range(5):
+        gdm_sharpness = torch.load(f"{gdm_directory}/eigs_{save_name}")[:,i]
+        axs[1].plot(torch.arange(len(gdm_sharpness)) * gd_eig_freq, gdm_sharpness, color="grey")
+        if i== 4:
+            axs[1].plot(torch.arange(len(gdm_sharpness)) * gd_eig_freq, gdm_sharpness, color="grey",label="GDM_top5")
+    axs[1].axhline(2*(1.9) / gdm_lr, linestyle='dotted',label="MSS_GDM")
 
 if compare_flat_scaling==1:
     mode_flat='flat_scaling_v1'
@@ -139,5 +152,5 @@ axs[1].set_xlabel("iteration")
 
 makedirs(f"{gd_directory}/figures", exist_ok=True)
 #plt.show()
-plt.savefig(f"{gd_directory}/figures/bulk_GD_GDM_cifar10.png", bbox_inches='tight', pad_inches=0)
+plt.savefig(f"{gd_directory}/figures/beta_GD_GDM_cifar10.png", bbox_inches='tight', pad_inches=0)
 
