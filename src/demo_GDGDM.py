@@ -95,12 +95,26 @@ if compare_flat_scaling==1:
 
 if compare_bulk_gd ==1:
     mode_bulk='flat_scaling_v1'
+    scaling_bulk=3.0
+    nfilter_bulk=80
+    save_name_bulk = "bulk_{}_{}_top_{}_step".format(mode_bulk, scaling_bulk,nfilter_bulk)
+    gd_train_loss_bulk = torch.load(f"{gd_directory}/train_loss_{save_name_bulk}")
+    train_loss_bulk = torch.cat((torch.tensor([np.nan]*middlePoint), gd_train_loss_bulk))
+    axs[0].plot(train_loss_bulk, color = "green",label=f"GD,bulk_scaling_{scaling_bulk}")
+
+    for i in range(5):
+        gd_sharpness = torch.load(f"{gd_directory}/eigs_{save_name_bulk}")[:,i]
+        axs[1].plot(middlePoint+torch.arange(len(gd_sharpness)) * gd_eig_freq, gd_sharpness, color="green")
+        if i== 4:
+            axs[1].plot(middlePoint+torch.arange(len(gd_sharpness)) * gd_eig_freq, gd_sharpness, color="green",label=f"GD_{mode_bulk}_{scaling_bulk}_top5")
+
+    mode_bulk='flat_scaling_v1'
     scaling_bulk=1.0
     nfilter_bulk=50
     save_name_bulk = "bulk_{}_{}_top_{}_step".format(mode_bulk, scaling_bulk,nfilter_bulk)
     gd_train_loss_bulk = torch.load(f"{gd_directory}/train_loss_{save_name_bulk}")
     train_loss_bulk = torch.cat((torch.tensor([np.nan]*middlePoint), gd_train_loss_bulk))
-    axs[0].plot(train_loss_bulk, color = "purple",label=f"GD,bulk_scaling_{scaling_bulk}")
+    axs[0].plot(train_loss_bulk, color = "red",label=f"GD,bulk_scaling_{scaling_bulk}")
 
     for i in range(5):
         gd_sharpness = torch.load(f"{gd_directory}/eigs_{save_name_bulk}")[:,i]

@@ -13,7 +13,7 @@ import os
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(device)
 # the default value for "physical batch size", which is the largest batch size that we try to put on the GPU
-DEFAULT_PHYS_BS = 2000
+DEFAULT_PHYS_BS = 5000
 
 
 
