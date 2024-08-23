@@ -19,14 +19,21 @@ DEFAULT_PHYS_BS = 6000
 
 
 
-def get_gd_directory(dataset: str, lr: float, arch_id: str, seed: int, opt: str, loss: str, beta: float = None):
+def get_gd_directory(dataset: str, lr: float, arch_id: str, seed: int, opt: str, loss: str, beta: float = None, BS : int = 0):
     """Return the directory in which the results should be saved."""
     results_dir = os.environ["RESULTS"]
     directory = f"{results_dir}/{dataset}/{arch_id}/seed_{seed}/{loss}/{opt}/"
     if opt == "gd":
-        return f"{directory}/lr_{lr}"
+        if BS == 0:
+            return f"{directory}/lr_{lr}"
+        else:
+            return f"{directory}/lr_{lr}/BS_{BS}"
     elif opt == "polyak" or opt == "nesterov":
-        return f"{directory}/lr_{lr}_beta_{beta}"
+        if BS == 0:
+            return f"{directory}/lr_{lr}_beta_{beta}"
+        else:
+            return f"{directory}/lr_{lr}_beta_{beta}/BS_{BS}"
+        
 
 def weights_init(m,gain):
     if isinstance(m, torch.nn.Conv2d) or isinstance(m, torch.nn.Linear):
@@ -72,9 +79,9 @@ def save_files_at_nstep(directory: str, arrays: List[Tuple[str, torch.Tensor]], 
 
 def iterate_dataset(dataset: Dataset, batch_size: int):
     """Iterate through a dataset, yielding batches of data."""
-    loader = DataLoader(dataset, batch_size=batch_size, shuffle=False)
+    loader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
     for (batch_X, batch_y) in loader:
-        yield batch_X.cuda(), batch_y.cuda()
+        yield batch_X.to(device), batch_y.to(device)
 
 
 def compute_flat_matrix(nfilter:int, eigvecs):
@@ -123,7 +130,7 @@ def compute_hvp(network: nn.Module, loss_fn: nn.Module,
     p = len(parameters_to_vector(network.parameters()))
     n = len(dataset)
     hvp = torch.zeros(p, dtype=torch.float, device='cuda')
-    vector = vector.cuda()
+    vector = vector.to(device)
     for (X, y) in iterate_dataset(dataset, physical_batch_size):
         loss = loss_fn(network(X), y) / n
         grads = torch.autograd.grad(loss, inputs=network.parameters(), create_graph=True)
@@ -138,7 +145,7 @@ def lanczos(matrix_vector, dim: int, neigs: int):
     (which we can access via matrix-vector products). """
 
     def mv(vec: np.ndarray):
-        gpu_vec = torch.tensor(vec, dtype=torch.float).cuda()
+        gpu_vec = torch.tensor(vec, dtype=torch.float).to(device)
         return matrix_vector(gpu_vec)
 
     operator = LinearOperator((dim, dim), matvec=mv, dtype=np.float32)

@@ -6,7 +6,6 @@ import os
 import torch
 from torch import Tensor
 import torch.nn.functional as F
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 DATASETS_FOLDER = os.environ["DATASETS"]
 
 def center(X_train: np.ndarray, X_test: np.ndarray):

@@ -135,17 +135,41 @@ $$
 ## Todo
 momentum参数0.99就更好了？ **解答：似乎beta越大在整个训练过程中速度会减慢，PS的速度变慢，而且有可能PS速度和loss下降速度成正比。**
 
-gradient norm是否平滑
+我现在可以比较的是：
+Momentum比较：不同beta对速度的影响，对PS速度的影响 [get]
+待做实验：warmup momentum是否一样的继承loss速度和PS速度？[get] warmup之后确实能够维持当前的PS过去，但是目前对收敛速度时间并没有改变
+
+gradient norm是否平滑 [get] 单调下降的时候gn都很小，EOS的时候GN比较大，可能就算是GN大但是对loss下降没有什么帮助
+
+同时也画出了Filter之后的梯度模[get]filter之后都是趋于0的。
+
 
 为什么GDM能近似一个Bulk-GD
 能不能给出一个intuition来找hessian或者这个方法的candidate
 
 momentum beta变大（接近1）（优化：beta warmup）和bulk-GD是不是一个效果？
+[get]这需要在cnn上验证一遍。
 
-但是momentum不能加速低频。
+warmup beta 的动量法和原版有差不多的loss下降能力，不会因为后者进入EOS而被甩开太久
+[get]后续并不知道，在cnn上继续验证
+
+但是momentum不能加速低频。[不能忍受的是momentum通过warmup beta能够得到和Bulk-GD一直一样的效果，在相同的effective lr下]
 
 momentum并没有filter的过程，但是为什么能够。
 
 SGD ， resnet 迁移
+--迁移结束就汇报
 
 分层算hessian，在拼起来
+
+除去在代码上优化此过程，还可以挖掘更多的信息
+
+我们的研究现在是抛开了Initialization，这我们觉得是更深度的内容，不包含在这次。可以参考Karla
+
+快速下降loss的最直接的关系：大lr+不进入EoS（保证所有eigenvalue大于MSS的方向不更新）
+
+都训练到相同的acc比时间好像没用了，因为对于SGD很难收到0.99
+
+接下来晚上比较相同epochs都到达了什么样的acc   先从500个epoch开始吧。
+
+SGD很多都达不到EOS，然后就想着还是加速，中间存一个中途的然后使用三种加速方式来对比

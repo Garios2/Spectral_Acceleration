@@ -5,6 +5,7 @@ from torch.nn.utils import parameters_to_vector
 
 import argparse
 from archs import load_architecture
+from torch.optim import SGD
 from utilities import get_gd_optimizer, get_gd_directory, get_loss_and_acc, compute_losses, \
     save_files, save_files_final, get_hessian_eigenvalues, iterate_dataset,compute_gradient,\
         save_files_at_nstep,compute_flat_matrix
@@ -15,7 +16,6 @@ export DATASETS=/data/users/zhouwenjie/workspace/Spectral_Acceleration/data
 export CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7
 export RESULTS=/data/users/zhouwenjie/workspace/Spectral_Acceleration/results
 """
-
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(device)
 
@@ -86,9 +86,19 @@ class AcD(torch.optim.Optimizer):
 
 def main(dataset: str, arch_id: str, loss: str, opt: str, lr: float, max_steps: int, mode: str="global_scaling",  neigs: int = 0, 
          physical_batch_size: int = 6000, eig_freq: int = -1, iterate_freq: int = -1, save_freq: int = -1,
-         save_model: bool = False, beta: float = 0.0, nproj: int = 0,
+         save_model: bool = False,save_middle_model : int = -1, beta: float = 0.0, BS: int = 0,nproj: int = 0,
          loss_goal: float = None, acc_goal: float = None, abridged_size: int = 5000, seed: int = 0, scaling: float = 1.0, nfilter: int = 10):
-    directory = get_gd_directory(dataset, lr, arch_id, seed, opt, loss, beta)
+    directory = get_gd_directory(dataset, lr, arch_id, seed, opt, loss, beta, BS)
+    if acc_goal == 0.99:
+        directory = f"{directory}/acc_0.99"
+    else:
+        directory = directory
+        #directory = f"{directory}/torch_SGD"
+        
+    if max_steps != 100000:
+        directory = f"{directory}/epoch_{max_steps}"
+
+    
     print(f"output directory: {directory}")
     makedirs(directory, exist_ok=True)
     train_dataset, test_dataset = load_dataset(dataset, loss)
@@ -100,9 +110,17 @@ def main(dataset: str, arch_id: str, loss: str, opt: str, lr: float, max_steps: 
 
     torch.manual_seed(seed)
     network = load_architecture(arch_id, dataset).to(device)
+
+    # 此为821晚的特殊安排
+    if opt == "polyak" and acc_goal == 0.99 and arch_id == "fc-tanh":
+        pretrained_dict = torch.load("/data/users/zhouwenjie/workspace/Spectral_Acceleration/results/cifar10/fc-tanh/seed_0/mse/polyak/lr_0.004_beta_0.9/acc_0.9/snapshot_global_scaling_1.0_top_20")
+        network.load_state_dict(pretrained_dict)
+    """
     if not (mode == 'global_scaling' and scaling ==1.0):
         pretrained_dict = torch.load(f"{directory}/snapshot_1000")
         network.load_state_dict(pretrained_dict)
+    """
+
 
 
 
@@ -112,7 +130,7 @@ def main(dataset: str, arch_id: str, loss: str, opt: str, lr: float, max_steps: 
     projectors = torch.randn(nproj, len(parameters_to_vector(network.parameters())))
     #optimizer = get_gd_optimizer(network.parameters(), opt, lr, beta)
     optimizer = AcD(params=network.parameters(), lr=lr, mode=mode,scaler=scaling, momentum=beta)
-
+    #optimizer = SGD(network.parameters(), lr=lr)
     train_loss, test_loss, train_acc, test_acc = \
         torch.zeros(max_steps), torch.zeros(max_steps), torch.zeros(max_steps), torch.zeros(max_steps)
     iterates = torch.zeros(max_steps // iterate_freq if iterate_freq > 0 else 0, len(projectors))
@@ -121,6 +139,7 @@ def main(dataset: str, arch_id: str, loss: str, opt: str, lr: float, max_steps: 
     #eigvecs = torch.zeros(max_steps // eig_freq if eig_freq >= 0 else 0, len_of_param, neigs)
     eigvecs = torch.zeros( len_of_param, neigs)
     gradients = torch.zeros(max_steps // eig_freq if eig_freq >= 0 else 0, len_of_param)
+    filtered_gradient = torch.zeros(max_steps // eig_freq if eig_freq >= 0 else 0, len_of_param)
    # param_flow = torch.zeros(max_steps // eig_freq if eig_freq >= 0 else 0, len_of_param)
     #flat_matrix = torch.eye(len_of_param)
     flat_matrix = None
@@ -130,7 +149,8 @@ def main(dataset: str, arch_id: str, loss: str, opt: str, lr: float, max_steps: 
                                                            physical_batch_size)
         test_loss[step], test_acc[step] = compute_losses(network, [loss_fn, acc_fn], test_dataset, physical_batch_size)
 
-        if float(eigs[step//eig_freq, 0]) >(2*(1+beta)/lr) and mode=='global_scaling' and step == 1000:
+        #if float(eigs[step//eig_freq, 0]) >(2*(1+beta)/lr) and mode=='global_scaling' and step == 1000:
+        if save_middle_model != -1 and step == save_middle_model:
             torch.save(network.state_dict(), f"{directory}/snapshot_{step}")
 
 
@@ -146,7 +166,9 @@ def main(dataset: str, arch_id: str, loss: str, opt: str, lr: float, max_steps: 
             """
             #param_flow[step // eig_freq,:] = parameters_to_vector(network.parameters())
             gradients[step // eig_freq,:] = compute_gradient(network, loss_fn,train_dataset)
-            flat_matrix = compute_flat_matrix(nfilter=nfilter,eigvecs=eigvecs[:,:])
+            if mode != 'global_scaling':
+                flat_matrix = compute_flat_matrix(nfilter=nfilter,eigvecs=eigvecs[:,:])
+                filtered_gradient[step // eig_freq,:] = flat_matrix(gradients[step // eig_freq,:].to(device))
             
         if iterate_freq != -1 and step % iterate_freq == 0:
             iterates[step // iterate_freq, :] = projectors.mv(parameters_to_vector(network.parameters()).cpu().detach())
@@ -164,17 +186,32 @@ def main(dataset: str, arch_id: str, loss: str, opt: str, lr: float, max_steps: 
         if (loss_goal != None and train_loss[step] < loss_goal) or (acc_goal != None and train_acc[step] > acc_goal):
             break
 
-        optimizer.zero_grad()
-        for (X, y) in iterate_dataset(train_dataset, physical_batch_size):
-            loss = loss_fn(network(X.to(device)), y.to(device)) / len(train_dataset)
-            loss.backward()
-        optimizer.step(flat_matrix=flat_matrix)
+        if BS != 0 :
+            for (X, y) in iterate_dataset(train_dataset, BS):
+                optimizer.zero_grad()  # 清零梯度
+                loss = loss_fn(network(X.to(device)), y.to(device))/ BS  # 计算损失
+                loss.backward()  # 反向传播
+                optimizer.step(flat_matrix=flat_matrix)  # 更新参数
+
+        else:
+            optimizer.zero_grad()
+            for (X, y) in iterate_dataset(train_dataset, physical_batch_size):
+                loss = loss_fn(network(X.to(device)), y.to(device)) / len(train_dataset)
+                loss.backward()
+            optimizer.step(flat_matrix=flat_matrix)
     save_name = "{}_{}_top_{}".format(mode, scaling,nfilter)
-    save_files_at_nstep(directory,
-                     [("eigs", eigs[:(step + 1) // eig_freq]), ("iterates", iterates[:(step + 1) // iterate_freq]),
-                     ("grads", gradients[:(step + 1) // eig_freq]),
-                      ("train_loss", train_loss[:step + 1]), ("test_loss", test_loss[:step + 1]),
-                      ("train_acc", train_acc[:step + 1]), ("test_acc", test_acc[:step + 1])], step=save_name)
+    if mode != 'global_scaling':
+        save_files_at_nstep(directory,
+                        [("eigs", eigs[:(step + 1) // eig_freq]), ("iterates", iterates[:(step + 1) // iterate_freq]),
+                        ("grads", gradients[:(step + 1) // eig_freq]),("filtered_grads", filtered_gradient[:(step + 1) // eig_freq]),
+                        ("train_loss", train_loss[:step + 1]), ("test_loss", test_loss[:step + 1]),
+                        ("train_acc", train_acc[:step + 1]), ("test_acc", test_acc[:step + 1])], step=save_name)
+    else:
+        save_files_at_nstep(directory,
+                [("eigs", eigs[:(step + 1) // eig_freq]), ("iterates", iterates[:(step + 1) // iterate_freq]),
+                ("grads", gradients[:(step + 1) // eig_freq]),("filtered_grads", filtered_gradient[:(step + 1) // eig_freq]),
+                ("train_loss", train_loss[:step + 1]), ("test_loss", test_loss[:step + 1]),
+                ("train_acc", train_acc[:step + 1]), ("test_acc", test_acc[:step + 1])], step=save_name)
     if save_model:
         torch.save(network.state_dict(), f"{directory}/snapshot_{save_name}")
 
@@ -193,6 +230,7 @@ if __name__ == "__main__":
     parser.add_argument("--seed", type=int, help="the random seed used when initializing the network weights",
                         default=0)
     parser.add_argument("--beta", type=float, help="momentum parameter (used if opt = polyak or nesterov)",default=0.0)
+    parser.add_argument("--BS", type=int, help="Batchsize(Use it if using SGD)",default=0)
     parser.add_argument("--physical_batch_size", type=int,
                         help="the maximum number of examples that we try to fit on the GPU at once", default=6000)
     parser.add_argument("--acc_goal", type=float,
@@ -210,6 +248,8 @@ if __name__ == "__main__":
                         help="the frequency at which we save resuls")
     parser.add_argument("--save_model", type=bool, default=True,
                         help="if 'true', save model weights at end of training")
+    parser.add_argument("--save_middle_model", type=int, default=-1,
+                        help="if not -1, save model weights at middle step of training")
     parser.add_argument("--scaling", type=float, default=1.0, help="the scaling")
     parser.add_argument("--nfilter", type=int, default=10, help="the number of top eigenvecter to filter")
 
@@ -217,6 +257,6 @@ if __name__ == "__main__":
 
     main(dataset=args.dataset, arch_id=args.arch_id, loss=args.loss, opt=args.opt, mode=args.mode, lr=args.lr, max_steps=args.max_steps,
          neigs=args.neigs, physical_batch_size=args.physical_batch_size, eig_freq=args.eig_freq,
-         iterate_freq=args.iterate_freq, save_freq=args.save_freq, save_model=args.save_model, beta=args.beta,
+         iterate_freq=args.iterate_freq, save_freq=args.save_freq, save_model=args.save_model,save_middle_model = args.save_middle_model, beta=args.beta,BS = args.BS,
          nproj=args.nproj, loss_goal=args.loss_goal, acc_goal=args.acc_goal, abridged_size=args.abridged_size,
          seed=args.seed, scaling=args.scaling, nfilter=args.nfilter)
