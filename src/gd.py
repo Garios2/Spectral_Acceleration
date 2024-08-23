@@ -115,11 +115,12 @@ def main(dataset: str, arch_id: str, loss: str, opt: str, lr: float, max_steps: 
     if opt == "polyak" and acc_goal == 0.99 and arch_id == "fc-tanh":
         pretrained_dict = torch.load("/data/users/zhouwenjie/workspace/Spectral_Acceleration/results/cifar10/fc-tanh/seed_0/mse/polyak/lr_0.004_beta_0.9/acc_0.9/snapshot_global_scaling_1.0_top_20")
         network.load_state_dict(pretrained_dict)
-    """
+    
     if not (mode == 'global_scaling' and scaling ==1.0):
-        pretrained_dict = torch.load(f"{directory}/snapshot_1000")
+        pretrained_dict = torch.load("/data/users/zhouwenjie/workspace/Spectral_Acceleration/results/cifar10/resnet18/seed_0/ce/gd/lr_0.04/BS_1000/epoch_200/snapshot_40")
+        #pretrained_dict = torch.load(f"{directory}/snapshot_40")
         network.load_state_dict(pretrained_dict)
-    """
+    
 
 
 
@@ -152,6 +153,7 @@ def main(dataset: str, arch_id: str, loss: str, opt: str, lr: float, max_steps: 
         #if float(eigs[step//eig_freq, 0]) >(2*(1+beta)/lr) and mode=='global_scaling' and step == 1000:
         if save_middle_model != -1 and step == save_middle_model:
             torch.save(network.state_dict(), f"{directory}/snapshot_{step}")
+            break
 
 
         # 其实是每隔eig_freq步才检查一次flat_matrix，然后再接下来eig_freq步内都使用同一个matrix来过滤
@@ -170,7 +172,7 @@ def main(dataset: str, arch_id: str, loss: str, opt: str, lr: float, max_steps: 
                 flat_matrix = compute_flat_matrix(nfilter=nfilter,eigvecs=eigvecs[:,:])
                 filtered_gradient[step // eig_freq,:] = flat_matrix(gradients[step // eig_freq,:].to(device))
             
-            if step != 0 and step % (2*eig_freq) == 0:
+            if step != 0 and step % (2*eig_freq) == 0 and save_middle_model==-1:
                     save_name = "{}_{}_top_{}".format(mode, scaling,nfilter)
                     if mode != 'global_scaling':
                         save_files_at_nstep(directory,
@@ -218,20 +220,21 @@ def main(dataset: str, arch_id: str, loss: str, opt: str, lr: float, max_steps: 
             optimizer.step(flat_matrix=flat_matrix)
     
     save_name = "{}_{}_top_{}".format(mode, scaling,nfilter)
-    if mode != 'global_scaling':
-        save_files_at_nstep(directory,
-                        [("eigs", eigs[:(step + 1) // eig_freq]), ("iterates", iterates[:(step + 1) // iterate_freq]),
-                        ("grads", gradients[:(step + 1) // eig_freq]),("filtered_grads", filtered_gradient[:(step + 1) // eig_freq]),
-                        ("train_loss", train_loss[:step + 1]), ("test_loss", test_loss[:step + 1]),
-                        ("train_acc", train_acc[:step + 1]), ("test_acc", test_acc[:step + 1])], step=save_name)
-    else:
-        save_files_at_nstep(directory,
-                [("eigs", eigs[:(step + 1) // eig_freq]), ("iterates", iterates[:(step + 1) // iterate_freq]),
-                ("grads", gradients[:(step + 1) // eig_freq]),("filtered_grads", filtered_gradient[:(step + 1) // eig_freq]),
-                ("train_loss", train_loss[:step + 1]), ("test_loss", test_loss[:step + 1]),
-                ("train_acc", train_acc[:step + 1]), ("test_acc", test_acc[:step + 1])], step=save_name)
-    if save_model:
-        torch.save(network.state_dict(), f"{directory}/snapshot_{save_name}")
+    if save_middle_model == -1:
+        if mode != 'global_scaling':
+            save_files_at_nstep(directory,
+                            [("eigs", eigs[:(step + 1) // eig_freq]), ("iterates", iterates[:(step + 1) // iterate_freq]),
+                            ("grads", gradients[:(step + 1) // eig_freq]),("filtered_grads", filtered_gradient[:(step + 1) // eig_freq]),
+                            ("train_loss", train_loss[:step + 1]), ("test_loss", test_loss[:step + 1]),
+                            ("train_acc", train_acc[:step + 1]), ("test_acc", test_acc[:step + 1])], step=save_name)
+        else:
+            save_files_at_nstep(directory,
+                    [("eigs", eigs[:(step + 1) // eig_freq]), ("iterates", iterates[:(step + 1) // iterate_freq]),
+                    ("grads", gradients[:(step + 1) // eig_freq]),("filtered_grads", filtered_gradient[:(step + 1) // eig_freq]),
+                    ("train_loss", train_loss[:step + 1]), ("test_loss", test_loss[:step + 1]),
+                    ("train_acc", train_acc[:step + 1]), ("test_acc", test_acc[:step + 1])], step=save_name)
+        if save_model:
+            torch.save(network.state_dict(), f"{directory}/snapshot_{save_name}")
 
 
 if __name__ == "__main__":

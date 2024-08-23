@@ -11,7 +11,7 @@ gd_eig_freq = 10
 cmap = plt.get_cmap('viridis')
 scaling = 1.0
 momentum = "polyak"
-middlePoint=1000
+middlePoint=40
 gdm_lr = gd_lr/10
 compare_flat_scaling = 0
 compare_gd = 0
@@ -32,16 +32,20 @@ gdm_directory = f"{environ['RESULTS']}/{dataset}/{arch}/seed_0/{loss}/{momentum}
 
 
 if sgd == 1:
-    dataset = "cifar10-5k"
+    dataset = "cifar10"
     color = "green"
-    lr = 0.004
-    BS = 1000
+    lr = 2.0
+    BS = 256
     loss = 'ce'
-    arch = 'cnn-relu'
-    gd_directory = f"{environ['RESULTS']}/{dataset}/{arch}/seed_0/{loss}/gd/lr_{lr}/BS_{BS}/epoch_3000"
+    arch = 'resnet18'
+    epoch = 200
+    gd_directory = f"{environ['RESULTS']}/{dataset}/{arch}/seed_0/{loss}/gd/lr_{lr}/BS_{BS}/epoch_{epoch}"
+    acc_goal = 0.99
+    if acc_goal == 0.99:
+        gd_directory = f"{environ['RESULTS']}/{dataset}/{arch}/seed_0/{loss}/gd/lr_{lr}/BS_{BS}/acc_{acc_goal}/epoch_{epoch}"
     mode='global_scaling'
     scaling=1.0
-    nfilter=10
+    nfilter=40
     save_name = "{}_{}_top_{}_step".format(mode, scaling,nfilter)
     gd_train_loss = torch.load(f"{gd_directory}/train_loss_{save_name}")
     axs[0].plot(gd_train_loss,label=f"SGD_lr = {lr},BS={BS}", color=color)
@@ -53,7 +57,7 @@ if sgd == 1:
         if i== 4:
             axs[1].plot(torch.arange(len(gd_sharpness)) * gd_eig_freq, gd_sharpness, color=color)
     axs[1].axhline(2 / lr, linestyle='dotted',label="MSS")
-
+    #axs[1].set_ylim(0,200)
     """
     color = "blue"
     lr = 0.1
@@ -76,7 +80,59 @@ if sgd == 1:
     """
 
 
-fig_name = f"sGd-cifar10.png"
+fig_name = f"_sGd-cifar10.png"
+
+if compare_flat_scaling==1:
+    dataset = "cifar10"
+    color = "green"
+    lr = 0.04
+    BS = 1000
+    loss = 'ce'
+    arch = 'resnet18'
+    mode_flat='global_scaling'
+    gd_directory = f"{environ['RESULTS']}/{dataset}/{arch}/seed_0/{loss}/gd/lr_{lr}/BS_{BS}/epoch_160"
+
+    scaling_flat=10.0
+    nfilter_flat=40
+    save_name_flat = "{}_{}_top_{}_step".format(mode_flat, scaling_flat,nfilter_flat)
+    gd_train_loss_flat = torch.load(f"{gd_directory}/train_loss_{save_name_flat}")
+    train_loss_flat = torch.cat((torch.tensor([np.nan]*middlePoint), gd_train_loss_flat))
+    axs[0].plot(train_loss_flat, color = "blue",label=f"SGD,{mode_flat}_{scaling_flat}")
+
+    for i in range(5):
+        gd_sharpness = torch.load(f"{gd_directory}/eigs_{save_name_flat}")[:,i]
+        axs[1].plot(middlePoint+torch.arange(len(gd_sharpness)) * gd_eig_freq, gd_sharpness, color="blue")
+        if i== 4:
+            axs[1].plot(middlePoint+torch.arange(len(gd_sharpness)) * gd_eig_freq, gd_sharpness, color="blue",label=f"SGD_{mode_flat}_{scaling_flat}_top5")
+
+
+    mode_flat='flat_scaling_v1'
+
+    save_name_flat = "{}_{}_top_{}_step".format(mode_flat, scaling_flat,nfilter_flat)
+    gd_train_loss_flat = torch.load(f"{gd_directory}/train_loss_{save_name_flat}")
+    train_loss_flat = torch.cat((torch.tensor([np.nan]*middlePoint), gd_train_loss_flat))
+    axs[0].plot(train_loss_flat, color = "purple",label=f"SGD,{mode_flat}_{scaling_flat}")
+
+    for i in range(5):
+        gd_sharpness = torch.load(f"{gd_directory}/eigs_{save_name_flat}")[:,i]
+        axs[1].plot(middlePoint+torch.arange(len(gd_sharpness)) * gd_eig_freq, gd_sharpness, color="purple")
+        if i== 4:
+            axs[1].plot(middlePoint+torch.arange(len(gd_sharpness)) * gd_eig_freq, gd_sharpness, color="purple",label=f"SGD_{mode_flat}_{scaling_flat}_top5")
+
+    mode_flat='flat_scaling_v2'
+
+    save_name_flat = "{}_{}_top_{}_step".format(mode_flat, scaling_flat,nfilter_flat)
+    gd_train_loss_flat = torch.load(f"{gd_directory}/train_loss_{save_name_flat}")
+    train_loss_flat = torch.cat((torch.tensor([np.nan]*middlePoint), gd_train_loss_flat))
+    axs[0].plot(train_loss_flat, color = "#4682B4",label=f"SGD,{mode_flat}_{scaling_flat}")
+
+    for i in range(5):
+        gd_sharpness = torch.load(f"{gd_directory}/eigs_{save_name_flat}")[:,i]
+        axs[1].plot(middlePoint+torch.arange(len(gd_sharpness)) * gd_eig_freq, gd_sharpness, color="#4682B4")
+        if i== 4:
+            axs[1].plot(middlePoint+torch.arange(len(gd_sharpness)) * gd_eig_freq, gd_sharpness, color="#4682B4",label=f"GD_{mode_flat}_{scaling_flat}_top5")
+
+    axs[1].axhline(2 / (scaling_flat*lr), linestyle='dotted',label="scaling_MSS")
 
 
 
@@ -203,34 +259,6 @@ if compare_gdm_acc_09 == 1:
             axs[1].plot(torch.arange(len(gdm_sharpness)) * gd_eig_freq, gdm_sharpness, color=color,label="warmup_beta")
     axs[1].axhline(2*(1.9) / lr, linestyle='dotted',label="MSS_GDM")
 
-if compare_flat_scaling==1:
-    mode_flat='flat_scaling_v1'
-    scaling_flat=3.0
-    nfilter_flat=40
-    save_name_flat = "{}_{}_top_{}_step".format(mode_flat, scaling_flat,nfilter_flat)
-    gd_train_loss_flat = torch.load(f"{gd_directory}/train_loss_{save_name_flat}")
-    train_loss_flat = torch.cat((torch.tensor([np.nan]*middlePoint), gd_train_loss_flat))
-    axs[0].plot(train_loss_flat, color = "purple",label=f"GD,flat_scaling_{scaling_flat}")
-
-    for i in range(5):
-        gd_sharpness = torch.load(f"{gd_directory}/eigs_{save_name_flat}")[:,i]
-        axs[1].plot(middlePoint+torch.arange(len(gd_sharpness)) * gd_eig_freq, gd_sharpness, color="purple")
-        if i== 4:
-            axs[1].plot(middlePoint+torch.arange(len(gd_sharpness)) * gd_eig_freq, gd_sharpness, color="purple",label=f"GD_{mode_flat}_{scaling_flat}_top5")
-
-    mode_flat='flat_scaling_v1'
-    scaling_flat=1.0
-    nfilter_flat=20
-    save_name_flat = "{}_{}_top_{}_step".format(mode_flat, scaling_flat,nfilter_flat)
-    gd_train_loss_flat = torch.load(f"{gd_directory}/train_loss_{save_name_flat}")
-    train_loss_flat = torch.cat((torch.tensor([np.nan]*middlePoint), gd_train_loss_flat))
-    axs[0].plot(train_loss_flat, color = "#4682B4",label=f"GD,flat_scaling_{scaling_flat}")
-
-    for i in range(5):
-        gd_sharpness = torch.load(f"{gd_directory}/eigs_{save_name_flat}")[:,i]
-        axs[1].plot(middlePoint+torch.arange(len(gd_sharpness)) * gd_eig_freq, gd_sharpness, color="#4682B4")
-        if i== 4:
-            axs[1].plot(middlePoint+torch.arange(len(gd_sharpness)) * gd_eig_freq, gd_sharpness, color="#4682B4",label=f"GD_{mode_flat}_{scaling_flat}_top5")
 
 if compare_bulk_gd ==1:
     mode_bulk='flat_scaling_v1'
