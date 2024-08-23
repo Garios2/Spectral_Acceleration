@@ -32,10 +32,11 @@ gdm_directory = f"{environ['RESULTS']}/{dataset}/{arch}/seed_0/{loss}/{momentum}
 
 
 if sgd == 1:
+    dataset = "cifar10-5k"
     color = "green"
     lr = 0.004
     BS = 1000
-    loss = 'mse'
+    loss = 'ce'
     arch = 'cnn-relu'
     gd_directory = f"{environ['RESULTS']}/{dataset}/{arch}/seed_0/{loss}/gd/lr_{lr}/BS_{BS}/epoch_3000"
     mode='global_scaling'
@@ -44,7 +45,8 @@ if sgd == 1:
     save_name = "{}_{}_top_{}_step".format(mode, scaling,nfilter)
     gd_train_loss = torch.load(f"{gd_directory}/train_loss_{save_name}")
     axs[0].plot(gd_train_loss,label=f"SGD_lr = {lr},BS={BS}", color=color)
-    
+    axs[0].set_title(f"train loss_{dataset}_{loss}")
+
     for i in range(5):
         gd_sharpness = torch.load(f"{gd_directory}/eigs_{save_name}")[:,i]
         axs[1].plot(torch.arange(len(gd_sharpness)) * gd_eig_freq, gd_sharpness, color=color)
@@ -77,7 +79,6 @@ if sgd == 1:
 fig_name = f"sGd-cifar10.png"
 
 
-axs[0].set_title("train loss")
 
 
 if compare_gd ==1:

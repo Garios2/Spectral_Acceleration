@@ -199,6 +199,7 @@ def main(dataset: str, arch_id: str, loss: str, opt: str, lr: float, max_steps: 
                 loss = loss_fn(network(X.to(device)), y.to(device)) / len(train_dataset)
                 loss.backward()
             optimizer.step(flat_matrix=flat_matrix)
+    
     save_name = "{}_{}_top_{}".format(mode, scaling,nfilter)
     if mode != 'global_scaling':
         save_files_at_nstep(directory,
