@@ -170,6 +170,23 @@ def main(dataset: str, arch_id: str, loss: str, opt: str, lr: float, max_steps: 
                 flat_matrix = compute_flat_matrix(nfilter=nfilter,eigvecs=eigvecs[:,:])
                 filtered_gradient[step // eig_freq,:] = flat_matrix(gradients[step // eig_freq,:].to(device))
             
+            if step != 0 and step % (2*eig_freq) == 0:
+                    save_name = "{}_{}_top_{}".format(mode, scaling,nfilter)
+                    if mode != 'global_scaling':
+                        save_files_at_nstep(directory,
+                                        [("eigs", eigs[:(step + 1) // eig_freq]), ("iterates", iterates[:(step + 1) // iterate_freq]),
+                                        ("grads", gradients[:(step + 1) // eig_freq]),("filtered_grads", filtered_gradient[:(step + 1) // eig_freq]),
+                                        ("train_loss", train_loss[:step + 1]), ("test_loss", test_loss[:step + 1]),
+                                        ("train_acc", train_acc[:step + 1]), ("test_acc", test_acc[:step + 1])], step=save_name)
+                    else:
+                        save_files_at_nstep(directory,
+                                [("eigs", eigs[:(step + 1) // eig_freq]), ("iterates", iterates[:(step + 1) // iterate_freq]),
+                                ("grads", gradients[:(step + 1) // eig_freq]),("filtered_grads", filtered_gradient[:(step + 1) // eig_freq]),
+                                ("train_loss", train_loss[:step + 1]), ("test_loss", test_loss[:step + 1]),
+                                ("train_acc", train_acc[:step + 1]), ("test_acc", test_acc[:step + 1])], step=save_name)
+
+
+            
         if iterate_freq != -1 and step % iterate_freq == 0:
             iterates[step // iterate_freq, :] = projectors.mv(parameters_to_vector(network.parameters()).cpu().detach())
 
