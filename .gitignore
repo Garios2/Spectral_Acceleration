@@ -5,6 +5,7 @@ demo.py
 .DS_Store
 .idea
 data/
+src/outputlog/
 results/*
 !results/cifar10/
 results/cifar10/*
