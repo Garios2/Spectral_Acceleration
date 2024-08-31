@@ -8,13 +8,14 @@ from archs import load_architecture
 from torch.optim import SGD
 from utilities import get_gd_optimizer, get_gd_directory, get_loss_and_acc, compute_losses, \
     save_files, save_files_final, get_hessian_eigenvalues, iterate_dataset,compute_gradient,\
-        save_files_at_nstep,compute_flat_matrix
+        save_files_at_nstep,compute_flat_matrix,get_directional_Hessian,compute_hvp,lanczos
 from data import load_dataset, take_first, DATASETS
 import os
 """
 export DATASETS=/data/users/zhouwenjie/workspace/Spectral_Acceleration/data
-export CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7
 export RESULTS=/data/users/zhouwenjie/workspace/Spectral_Acceleration/results
+export CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7
+
 """
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(device)
@@ -90,12 +91,14 @@ def main(dataset: str, arch_id: str, loss: str, opt: str, lr: float, max_steps: 
          loss_goal: float = None, acc_goal: float = None, abridged_size: int = 5000, seed: int = 0, scaling: float = 1.0, nfilter: int = 10):
     directory = get_gd_directory(dataset, lr, arch_id, seed, opt, loss, beta, BS)
     if acc_goal == 0.99:
-        directory = f"{directory}/acc_0.99"
+        directory = f"{directory}/acc_0.99/bulk-only"
     else:
         directory = directory
         #directory = f"{directory}/torch_SGD"
-        
-    if max_steps != 100000:
+    if opt=='polyak' and lr==0.004:
+        directory = f"{directory}/warmupbeta_0.95"
+
+    if BS != 0:
         directory = f"{directory}/epoch_{max_steps}"
 
     
@@ -111,13 +114,17 @@ def main(dataset: str, arch_id: str, loss: str, opt: str, lr: float, max_steps: 
     torch.manual_seed(seed)
     network = load_architecture(arch_id, dataset).to(device)
 
-    # 此为821晚的特殊安排
-    if opt == "polyak" and acc_goal == 0.99 and arch_id == "fc-tanh":
-        pretrained_dict = torch.load("/data/users/zhouwenjie/workspace/Spectral_Acceleration/results/cifar10/fc-tanh/seed_0/mse/polyak/lr_0.004_beta_0.9/acc_0.9/snapshot_global_scaling_1.0_top_20")
-        network.load_state_dict(pretrained_dict)
+
+    
+
+    #pretrained_dict = torch.load("/data/users/zhouwenjie/workspace/Spectral_Acceleration/results/cifar10-5k/cnn-relu/seed_0/ce/gd/lr_0.01/acc_0.99/snapshot_1000")
+    #pretrained_dict = torch.load(f"{directory}/snapshot_40")
+    #network.load_state_dict(pretrained_dict)
+    #一些不加载的实验
     """
     if not (mode == 'global_scaling' and scaling ==1.0):
-        pretrained_dict = torch.load(f"{directory}/snapshot_1000")
+        pretrained_dict = torch.load("/data/users/zhouwenjie/workspace/Spectral_Acceleration/results/cifar10/resnet18/seed_0/ce/gd/lr_0.04/BS_1000/epoch_200/snapshot_40")
+        #pretrained_dict = torch.load(f"{directory}/snapshot_40")
         network.load_state_dict(pretrained_dict)
     """
 
@@ -140,14 +147,27 @@ def main(dataset: str, arch_id: str, loss: str, opt: str, lr: float, max_steps: 
     eigvecs = torch.zeros( len_of_param, neigs)
     gradients = torch.zeros(max_steps // eig_freq if eig_freq >= 0 else 0, len_of_param)
     filtered_gradient = torch.zeros(max_steps // eig_freq if eig_freq >= 0 else 0, len_of_param)
+    Dom_gradient = torch.zeros(max_steps // eig_freq if eig_freq >= 0 else 0, len_of_param)
+   
+   
    # param_flow = torch.zeros(max_steps // eig_freq if eig_freq >= 0 else 0, len_of_param)
     #flat_matrix = torch.eye(len_of_param)
     flat_matrix = None
     flag=1
+
+    quadratic_update,Bulk_update, Dom_update = torch.zeros(max_steps),torch.zeros(max_steps), torch.zeros(max_steps)
     for step in range(max_steps): 
         train_loss[step], train_acc[step] = compute_losses(network, [loss_fn, acc_fn], train_dataset,
                                                            physical_batch_size)
         test_loss[step], test_acc[step] = compute_losses(network, [loss_fn, acc_fn], test_dataset, physical_batch_size)
+        # 这里新加一部分，分别为Bulk-update和Dom-update，也就是每一次要求出来Filter Matrix
+        # 
+        
+
+        if opt=='polyak' and lr==0.004 and step==750:
+            beta = 0.95
+            lr=0.002
+            optimizer = AcD(params=network.parameters(), lr=lr, mode=mode,scaler=scaling, momentum=beta)
 
         #if float(eigs[step//eig_freq, 0]) >(2*(1+beta)/lr) and mode=='global_scaling' and step == 1000:
         if save_middle_model != -1 and step == save_middle_model:
@@ -156,8 +176,31 @@ def main(dataset: str, arch_id: str, loss: str, opt: str, lr: float, max_steps: 
 
         # 其实是每隔eig_freq步才检查一次flat_matrix，然后再接下来eig_freq步内都使用同一个matrix来过滤
         if eig_freq != -1 and step % eig_freq == 0:
-            eigs[step // eig_freq, :], eigvecs[ :,:] = get_hessian_eigenvalues(network, loss_fn, abridged_train, neigs=neigs,
-                                                                physical_batch_size=physical_batch_size)
+            if step==0:
+                Dom_update[step] = train_loss[0]
+                Bulk_update[step] = train_loss[0]
+                quadratic_update[step] = train_loss[0]
+            else:
+                Dom_update[step] = Dom_update[(step) -1]- lr * torch.norm(Dom_gradient[step-1,:])**2 +\
+                    0.5*lr**2*torch.dot(Dom_gradient[step-1],hvp_delta(Dom_gradient[step-1]))
+                quadratic_update[step] = quadratic_update[step-1]- \
+                    lr * torch.norm(gradients[step-1,:])**2 + 0.5*lr**2*torch.dot(gradients[step-1],hvp_delta(gradients[step-1]))
+                Bulk_update[step] = Bulk_update[step -1] - \
+                    lr * torch.norm(filtered_gradient[step-1,:])**2 + 0.5*lr**2*torch.dot(filtered_gradient[step-1],hvp_delta(filtered_gradient[step-1]))
+
+            hvp_delta = lambda delta: compute_hvp(network, loss_fn,abridged_train,
+                                          delta, physical_batch_size=physical_batch_size).detach().cpu()
+            nparams = len(parameters_to_vector((network.parameters())))
+            eigs[step // eig_freq, :], eigvecs[ :,:] = lanczos(hvp_delta, nparams, neigs=neigs)
+            gradients[step // eig_freq,:] = compute_gradient(network, loss_fn,train_dataset)
+            flat_matrix = compute_flat_matrix(nfilter=nfilter,eigvecs=eigvecs[:,:])
+            filtered_gradient[step // eig_freq,:] = flat_matrix(gradients[step // eig_freq,:].to(device))
+
+            Dom_gradient[step // eig_freq,:] = gradients[step // eig_freq,:] - filtered_gradient[step // eig_freq,:] 
+
+
+            #eigs[step // eig_freq, :], eigvecs[ :,:] = get_hessian_eigenvalues(network, loss_fn, abridged_train, neigs=neigs,
+            #                                                   physical_batch_size=physical_batch_size)
             print("eigenvalues: ", eigs[step//eig_freq, :])
             """
             if float(eigs[step//eig_freq, 0]) >(2*(1+beta)/lr) and mode=='global_scaling' and scaling==1.0 and flag == 1:
@@ -165,10 +208,18 @@ def main(dataset: str, arch_id: str, loss: str, opt: str, lr: float, max_steps: 
                 flag=0            
             """
             #param_flow[step // eig_freq,:] = parameters_to_vector(network.parameters())
-            gradients[step // eig_freq,:] = compute_gradient(network, loss_fn,train_dataset)
-            if mode != 'global_scaling':
-                flat_matrix = compute_flat_matrix(nfilter=nfilter,eigvecs=eigvecs[:,:])
-                filtered_gradient[step // eig_freq,:] = flat_matrix(gradients[step // eig_freq,:].to(device))
+
+
+            if step != 0 and step % (2*eig_freq) == 0 :
+                    save_name = "{}_{}_top_{}".format(mode, scaling,nfilter)
+                    save_files_at_nstep(directory,
+                    [("eigs", eigs[:(step + 1) // eig_freq]), ("iterates", iterates[:(step + 1) // iterate_freq]),
+                    ("grads", gradients[:(step + 1) // eig_freq]),("filtered_grads", filtered_gradient[:(step + 1) // eig_freq]),
+                    ("train_loss", train_loss[:step + 1]), ("test_loss", test_loss[:step + 1]),
+                    ("dom_update", Dom_update[:step + 1]), ("bulk_update", Bulk_update[:step + 1]),("quadratic_update", quadratic_update[:step + 1]),
+                    ("train_acc", train_acc[:step + 1]), ("test_acc", test_acc[:step + 1])], step=save_name)
+
+
             
         if iterate_freq != -1 and step % iterate_freq == 0:
             iterates[step // iterate_freq, :] = projectors.mv(parameters_to_vector(network.parameters()).cpu().detach())
@@ -201,18 +252,12 @@ def main(dataset: str, arch_id: str, loss: str, opt: str, lr: float, max_steps: 
             optimizer.step(flat_matrix=flat_matrix)
     
     save_name = "{}_{}_top_{}".format(mode, scaling,nfilter)
-    if mode != 'global_scaling':
-        save_files_at_nstep(directory,
-                        [("eigs", eigs[:(step + 1) // eig_freq]), ("iterates", iterates[:(step + 1) // iterate_freq]),
-                        ("grads", gradients[:(step + 1) // eig_freq]),("filtered_grads", filtered_gradient[:(step + 1) // eig_freq]),
-                        ("train_loss", train_loss[:step + 1]), ("test_loss", test_loss[:step + 1]),
-                        ("train_acc", train_acc[:step + 1]), ("test_acc", test_acc[:step + 1])], step=save_name)
-    else:
-        save_files_at_nstep(directory,
-                [("eigs", eigs[:(step + 1) // eig_freq]), ("iterates", iterates[:(step + 1) // iterate_freq]),
-                ("grads", gradients[:(step + 1) // eig_freq]),("filtered_grads", filtered_gradient[:(step + 1) // eig_freq]),
-                ("train_loss", train_loss[:step + 1]), ("test_loss", test_loss[:step + 1]),
-                ("train_acc", train_acc[:step + 1]), ("test_acc", test_acc[:step + 1])], step=save_name)
+    save_files_at_nstep(directory,
+                    [("eigs", eigs[:(step + 1) // eig_freq]), ("iterates", iterates[:(step + 1) // iterate_freq]),
+                    ("grads", gradients[:(step + 1) // eig_freq]),("filtered_grads", filtered_gradient[:(step + 1) // eig_freq]),
+                    ("train_loss", train_loss[:step + 1]), ("test_loss", test_loss[:step + 1]),
+                    ("dom_update", Dom_update[:step + 1]), ("bulk_update", Bulk_update[:step + 1]),("quadratic_update", quadratic_update[:step + 1]),
+                    ("train_acc", train_acc[:step + 1]), ("test_acc", test_acc[:step + 1])], step=save_name)
     if save_model:
         torch.save(network.state_dict(), f"{directory}/snapshot_{save_name}")
 

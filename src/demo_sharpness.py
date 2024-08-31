@@ -6,81 +6,365 @@ import numpy as np
 dataset = "cifar10"
 arch = "fc-tanh"
 loss = "mse"
-gd_lr = 0.02
-gd_eig_freq = 100
+gd_lr = 0.04
+gd_eig_freq = 1
 cmap = plt.get_cmap('viridis')
 scaling = 1.0
 momentum = "polyak"
-middlePoint=2000
+middlePoint=1000
+gdm_lr = gd_lr/10
+compare_flat_scaling = 0
+compare_gd =1
+compare_gdm=0
+compare_bulk_gd = 0
+compare_gdm_beta_99 =0
+compare_gdm_beta_50 =0
+compare_gdm_warmup_beta = 0
+compare_gdm_acc_09 = 0
+
+compare_bulk_gd_1=0
+gdm = 0
 
 #gd_directory = f"{environ['RESULTS']}/{dataset}/{arch}/seed_0/{loss}/gd/lr_{gd_lr}"
+fig, axs = plt.subplots(2, 1, figsize=(10, 10), dpi=100, sharex=True)
 gd_directory = f"{environ['RESULTS']}/{dataset}/{arch}/seed_0/{loss}/gd/lr_{gd_lr}"
-if momentum == "polyak":
-    gd_directory = f"{environ['RESULTS']}/{dataset}/{arch}/seed_0/{loss}/{momentum}/lr_{gd_lr}_beta_0.9"
+gdm_directory = f"{environ['RESULTS']}/{dataset}/{arch}/seed_0/{loss}/{momentum}/lr_{gdm_lr}_beta_0.9"
 
-mode='global_scaling'
-scaling=1.0
-nfilter=20
-save_name = "{}_{}_top_{}_step".format(mode, scaling,nfilter)
-gd_train_loss = torch.load(f"{gd_directory}/train_loss_{save_name}")
-"""
-original, flat_scaling_v1, flat_scaling_v2
-"""
-mode='flat_scaling_v2'
 
-if mode != 'original':
-    scaling=1.5
+if gdm == 1:
+    dataset = "cifar10-5k"
+    color = "green"
+    lr = 0.004
+    loss = 'ce'
+    arch = 'cnn-relu'
+    gd_directory = f"{environ['RESULTS']}/{dataset}/{arch}/seed_0/{loss}/{momentum}/lr_{lr}_beta_0.9/acc_0.99/bulk-only/warmupbeta_0.95"
+    mode='global_scaling'
+    scaling=1.0
     nfilter=20
     save_name = "{}_{}_top_{}_step".format(mode, scaling,nfilter)
-    gd_train_loss_flat = torch.load(f"{gd_directory}/train_loss_{save_name}")
+    gd_train_loss = torch.load(f"{gd_directory}/train_loss_{save_name}")
+    axs[0].plot(gd_train_loss,label=f"GDM_lr = {lr}", color=color)
+    axs[0].set_title(f"train loss_{dataset}_{loss}")
+
+    for i in range(10):
+        gd_sharpness = torch.load(f"{gd_directory}/eigs_{save_name}")[:,i]
+        axs[1].plot(torch.arange(len(gd_sharpness)) * gd_eig_freq, gd_sharpness, color=color)
+        if i== 4:
+            axs[1].plot(torch.arange(len(gd_sharpness)) * gd_eig_freq, gd_sharpness, color=color)
+    axs[1].axhline(3.8 / (lr*scaling), linestyle='dotted',label="MSS_GDM")
+
+    """
+    color = "blue"
+    lr = 0.1
+    BS = 1000
+    arch = 'cnn-relu'
+    gd_directory = f"{environ['RESULTS']}/{dataset}/{arch}/seed_0/{loss}/gd/lr_{lr}/BS_{BS}/acc_0.99/epoch_500"
+    mode='global_scaling'
+    scaling=1.0
+    nfilter=20
+    save_name = "{}_{}_top_{}_step".format(mode, scaling,nfilter)
+    gd_train_loss = torch.load(f"{gd_directory}/train_loss_{save_name}")
+    axs[0].plot(gd_train_loss,label=f"SGD_lr = {lr},BS={BS}", color=color)
+    
+    for i in range(5):
+        gd_sharpness = torch.load(f"{gd_directory}/eigs_{save_name}")[:,i]
+        axs[1].plot(torch.arange(len(gd_sharpness)) * gd_eig_freq, gd_sharpness, color=color)
+        if i== 4:
+            axs[1].plot(torch.arange(len(gd_sharpness)) * gd_eig_freq, gd_sharpness, color=color)
+    axs[1].axhline(2 / lr, linestyle='dotted',label="MSS")    
+    """
+
+
+fig_name = f"GDM_BulkGD_-cifar10_8.png"
+
+if compare_bulk_gd_1 ==1:
+    for nfilter in [40,100]:
+        dataset = "cifar10-5k"
+        #color = "blue"
+        color = cmap(nfilter/100)
+        lr = 0.04
+        loss = 'ce'
+        arch = 'cnn-relu'
+        gd_directory = f"{environ['RESULTS']}/{dataset}/{arch}/seed_0/{loss}/gd/lr_{lr}/acc_0.99/bulk-only"
+        mode='flat_scaling_v1'
+        scaling=1.0
+        #nfilter=20
+        middlePoint=0
+
+        save_name = "{}_{}_top_{}_step".format(mode, scaling,nfilter)
+        gd_train_loss = torch.load(f"{gd_directory}/train_loss_{save_name}")
+        axs[0].plot(torch.cat((torch.tensor([np.nan]*middlePoint), gd_train_loss)),label=f"Bulk-GD top{nfilter} lr = {lr}", color=color)
+        axs[0].set_title(f"train loss_{dataset}_{loss}")
+
+        for i in range(10):
+            gd_sharpness = torch.load(f"{gd_directory}/eigs_{save_name}")[:,i]
+            axs[1].plot(middlePoint+torch.arange(len(gd_sharpness)) * gd_eig_freq, gd_sharpness, color=color)
+            if i== 4:
+                axs[1].plot(middlePoint+torch.arange(len(gd_sharpness)) * gd_eig_freq, gd_sharpness, color=color)
+        axs[1].axhline(2 / (lr*scaling), linestyle='dotted',label="MSS_GD")
+
+
+
+if compare_gdm_beta_99==1:
+    dataset = "cifar10-5k"
+    color = "red"
+    lr = 0.05
+    beta=0.99
+    loss = 'ce'
+    arch = 'cnn-relu'
+    gd_directory = f"{environ['RESULTS']}/{dataset}/{arch}/seed_0/{loss}/{momentum}/lr_{lr}_beta_{beta}/acc_0.99/bulk-only"
+    mode='global_scaling'
+    scaling=1.0
+    nfilter=20
+    save_name = "{}_{}_top_{}_step".format(mode, scaling,nfilter)
+    gd_train_loss = torch.load(f"{gd_directory}/train_loss_{save_name}")
+    axs[0].plot(gd_train_loss,label=f"GDM_lr = {lr}", color=color)
+    axs[0].set_title(f"train loss_{dataset}_{loss}")
+
+    for i in range(10):
+        gd_sharpness = torch.load(f"{gd_directory}/eigs_{save_name}")[:,i]
+        axs[1].plot(torch.arange(len(gd_sharpness)) * gd_eig_freq, gd_sharpness, color=color)
+        if i== 4:
+            axs[1].plot(torch.arange(len(gd_sharpness)) * gd_eig_freq, gd_sharpness, color=color)
+    axs[1].axhline(3.99 / (lr*scaling), linestyle='dotted',label="MSS_GDM")
+
+
+if compare_gd ==1:
+    dataset = "cifar10-5k"
+    color = "red"
+    lr = 0.016
+    loss = 'ce'
+    arch = 'cnn-relu'
+    gd_directory = f"{environ['RESULTS']}/{dataset}/{arch}/seed_0/{loss}/gd/lr_{lr}/acc_0.99/bulk-only"
+    mode='global_scaling'
+    scaling=1.0
+    nfilter=1
+    save_name = "{}_{}_top_{}_step".format(mode, scaling,nfilter)
+    gd_train_loss = torch.load(f"{gd_directory}/train_loss_{save_name}")
+
+    quadratic_update = torch.load(f"{gd_directory}/quadratic_update_{mode}_{scaling}_top_{nfilter}_step")
+    bulk_update = torch.load(f"{gd_directory}/bulk_update_{mode}_{scaling}_top_{nfilter}_step")
+    dom_update = torch.load(f"{gd_directory}/dom_update_{mode}_{scaling}_top_{nfilter}_step")
+    bulk_grads = torch.load(f"{gd_directory}/filtered_grads_{mode}_{scaling}_top_{nfilter}_step")
+    grads = torch.load(f"{gd_directory}/grads_{mode}_{scaling}_top_{nfilter}_step")
+    dom_grads = grads.clone()-bulk_grads.clone()
+
+
+
+    b_update = bulk_update.clone()
+    g_update =[]
+    d_update= dom_update.clone()
+
+    eigvals = torch.load(f"{gd_directory}/eigs_{mode}_{scaling}_top_{nfilter}_step")
+    # 对于每个元素，计算新的值
+    for i in range(1,len(b_update)):
+        b_update[-i] = b_update[-i] - b_update[-i-1]
+        d_update[-i] = d_update[-i] - d_update[-i-1]
+    b_update[0] = 0
+    d_update[0] = 0
+
+    domnorm = [lr*torch.norm(u)**2 for u in dom_grads]
+    
+    #print(d_update)
+    axs[0].plot(gd_train_loss,label=f"GD lr = {lr}", color=color)
+    axs[0].plot(quadratic_update,label=f"Quadratic approximation", color="blue",alpha=0.5)
+    axs[0].plot(domnorm,label=f"Dom_update", color="orange")
+    axs[0].plot(bulk_update,label=f"Bulk_update", color="green")
+
+    print(f"dom_update:{torch.sum(d_update)}")
+    print(f"bulk_update:{torch.sum(b_update)}")
+    print(f"quadratic_update:{torch.sum(b_update)+torch.sum(d_update) }")
+
+    print(f"real_update:{gd_train_loss[-1] - gd_train_loss[0]}")
+    axs[0].set_title(f"train loss_{dataset}_{loss}")
+
+    for i in range(5):
+        gd_sharpness = torch.load(f"{gd_directory}/eigs_{save_name}")[:,i]
+        axs[1].plot(torch.arange(len(gd_sharpness)) * gd_eig_freq, gd_sharpness, color=color)
+        if i== 4:
+            axs[1].plot(torch.arange(len(gd_sharpness)) * gd_eig_freq, gd_sharpness, color=color)
+    axs[1].axhline(2 / (lr*scaling), linestyle='dotted',label="MSS_GD",color=color)
+
+
+
+if compare_flat_scaling==1:
+    dataset = "cifar10-5k"
+    lr = 0.004
+    BS = 1000
+    loss = 'ce'
+    arch = 'cnn-relu'
+    mode_flat='global_scaling'
+    scaling_flat=2.0
+    nfilter_flat=20
+    save_name_flat = "{}_{}_top_{}_step".format(mode_flat, scaling_flat,nfilter_flat)
+    gd_train_loss_flat = torch.load(f"{gd_directory}/train_loss_{save_name_flat}")
     train_loss_flat = torch.cat((torch.tensor([np.nan]*middlePoint), gd_train_loss_flat))
+    axs[0].plot(train_loss_flat, color = "blue",label=f"SGD,{mode_flat}_{scaling_flat}")
+
+    for i in range(5):
+        gd_sharpness = torch.load(f"{gd_directory}/eigs_{save_name_flat}")[:,i]
+        axs[1].plot(middlePoint+torch.arange(len(gd_sharpness)) * gd_eig_freq, gd_sharpness, color="blue")
+        if i== 4:
+            axs[1].plot(middlePoint+torch.arange(len(gd_sharpness)) * gd_eig_freq, gd_sharpness, color="blue",label=f"SGD_{mode_flat}_{scaling_flat}_top5")
 
 
-fig, axs = plt.subplots(2, 1, figsize=(10, 10), dpi=100, sharex=True)
+    mode_flat='flat_scaling_v1'
+    scaling_flat=2.0
+    nfilter_flat=20
+    save_name_flat = "{}_{}_top_{}_step".format(mode_flat, scaling_flat,nfilter_flat)
+    gd_train_loss_flat = torch.load(f"{gd_directory}/train_loss_{save_name_flat}")
+    train_loss_flat = torch.cat((torch.tensor([np.nan]*middlePoint), gd_train_loss_flat))
+    axs[0].plot(train_loss_flat, color = "purple",label=f"SGD,{mode_flat}_{scaling_flat}")
 
-axs[0].plot(gd_train_loss)
-if mode != 'original':
-    axs[0].plot(train_loss_flat, color = "green")
-axs[0].set_title("train loss")
+    for i in range(5):
+        gd_sharpness = torch.load(f"{gd_directory}/eigs_{save_name_flat}")[:,i]
+        axs[1].plot(middlePoint+torch.arange(len(gd_sharpness)) * gd_eig_freq, gd_sharpness, color="purple")
+        if i== 4:
+            axs[1].plot(middlePoint+torch.arange(len(gd_sharpness)) * gd_eig_freq, gd_sharpness, color="purple",label=f"SGD_{mode_flat}_{scaling_flat}_top5")
 
-for i in range(20):
-    if mode != 'original':
-        pre_sharpness = torch.load(f"{gd_directory}/eigs_global_scaling_1.0_top_20_step")[:int(middlePoint/gd_eig_freq),i]
-    else:
-        pre_sharpness = torch.load(f"{gd_directory}/eigs_global_scaling_1.0_top_20_step")[:,i]
+    mode_flat='flat_scaling_v2'
+    scaling_flat=2.0
+    nfilter_flat=20
+    save_name_flat = "{}_{}_top_{}_step".format(mode_flat, scaling_flat,nfilter_flat)
+    gd_train_loss_flat = torch.load(f"{gd_directory}/train_loss_{save_name_flat}")
+    train_loss_flat = torch.cat((torch.tensor([np.nan]*middlePoint), gd_train_loss_flat))
+    axs[0].plot(train_loss_flat, color = "#4682B4",label=f"SGD,{mode_flat}_{scaling_flat}")
 
-    if mode != 'original':
-        gd_sharpness = torch.cat((torch.tensor([np.nan]*(int(middlePoint/gd_eig_freq))), torch.load(f"{gd_directory}/eigs_{save_name}")[:,i]))
-    if i == 9:
-        axs[1].plot(torch.arange(len(pre_sharpness)) * gd_eig_freq, pre_sharpness, color="red",label="10th largerst elgenval")
-        if mode != 'original':
-            axs[1].plot(torch.arange(len(gd_sharpness)) * gd_eig_freq, gd_sharpness, color="red",label="10th largerst elgenval")
+    for i in range(5):
+        gd_sharpness = torch.load(f"{gd_directory}/eigs_{save_name_flat}")[:,i]
+        axs[1].plot(middlePoint+torch.arange(len(gd_sharpness)) * gd_eig_freq, gd_sharpness, color="#4682B4")
+        if i== 4:
+            axs[1].plot(middlePoint+torch.arange(len(gd_sharpness)) * gd_eig_freq, gd_sharpness, color="#4682B4",label=f"GD_{mode_flat}_{scaling_flat}_top5")
 
-    else:
-        axs[1].plot(torch.arange(len(pre_sharpness)) * gd_eig_freq, pre_sharpness, color=cmap(i/nfilter))
-        if mode != 'original':
-            axs[1].plot(torch.arange(len(gd_sharpness)) * gd_eig_freq, gd_sharpness, color=cmap(i/nfilter))
-
-if nfilter>20:
-    for i in range(nfilter-20):
-        gd_sharpness = torch.cat((torch.tensor([np.nan]*30), torch.load(f"{gd_directory}/eigs_{save_name}")[:,i+20]))
-        axs[1].plot(torch.arange(len(gd_sharpness)) * gd_eig_freq, gd_sharpness, color=cmap((20+i)/nfilter))
-
-
+    axs[1].axhline(2 / (scaling_flat*lr), linestyle='dotted',label="scaling_MSS")
 
 
-if mode != 'original':
-    axs[1].axvline(middlePoint, linestyle='dotted',color='red')
-if momentum == "polyak":
-    axs[1].axhline(2*(1.9) / gd_lr, linestyle='dotted')
-    axs[1].axhline(2*(1.9) / (gd_lr*scaling), linestyle='dotted')
-else:
-    axs[1].axhline(2. / gd_lr, linestyle='dotted')
-    axs[1].axhline(2. / (gd_lr*scaling), linestyle='dotted')
-axs[1].set_title("sharpness")
+
+
+
+
+
+
+if compare_gdm_beta_50==1:
+    color = "grey"
+    lr = gd_lr/2
+    gdm_directory = f"{environ['RESULTS']}/{dataset}/{arch}/seed_0/{loss}/{momentum}/lr_{lr}_beta_0.5"
+    mode='global_scaling'
+    scaling=1.0
+    nfilter=20
+    save_name = "{}_{}_top_{}_step".format(mode, scaling,nfilter)
+    gdm_train_loss = torch.load(f"{gdm_directory}/train_loss_{save_name}")
+    axs[0].plot(gdm_train_loss,label=f"GDM,beta=0.5", color=color,alpha = 0.5)
+
+    for i in range(5):
+        gdm_sharpness = torch.load(f"{gdm_directory}/eigs_{save_name}")[:,i]
+        axs[1].plot(torch.arange(len(gdm_sharpness)) * gd_eig_freq, gdm_sharpness, color=color)
+        if i== 4:
+            axs[1].plot(torch.arange(len(gdm_sharpness)) * gd_eig_freq, gdm_sharpness, color=color,label="beta0.5")
+    axs[1].axhline(2*(1.5) / lr, linestyle='dotted',label="MSS_GDM")
+
+if compare_gdm_warmup_beta==1:
+    color = "purple"
+    lr = gd_lr/10
+    gdm_directory = f"{environ['RESULTS']}/{dataset}/{arch}/seed_0/{loss}/{momentum}/lr_{lr}_beta_0.9/warmup_beta_0.99"
+    mode='global_scaling'
+    scaling=1.0
+    nfilter=1
+    save_name = "{}_{}_top_{}_step".format(mode, scaling,nfilter)
+
+    gdm_train_loss = torch.load(f"{gdm_directory}/train_loss_{save_name}")
+    axs[0].plot(gdm_train_loss,label=f"GDM,warmup beta", color=color)
+
+    for i in range(5):
+        gdm_sharpness = torch.load(f"{gdm_directory}/eigs_{save_name}")[:,i]
+        axs[1].plot(torch.arange(len(gdm_sharpness)) * gd_eig_freq, gdm_sharpness, color=color)
+        if i== 4:
+            axs[1].plot(torch.arange(len(gdm_sharpness)) * gd_eig_freq, gdm_sharpness, color=color,label="warmup_beta")
+    axs[1].axhline(2*(1.9) / lr, linestyle='dotted',label="MSS_GDM")
+
+if compare_gdm_acc_09 == 1:
+    mode='global_scaling'
+    scaling=1.0
+    nfilter=20
+    save_name = "{}_{}_top_{}_step".format(mode, scaling,nfilter)
+    gdm_train_loss_1 = torch.load(f"{gdm_directory}/train_loss_{save_name}")
+    gdm_train_loss_2 = torch.load(f"{gdm_directory}/acc_0.99/train_loss_{save_name}")
+    gdm_train_loss = torch.cat((gdm_train_loss_1,gdm_train_loss_2))
+    axs[0].plot(gdm_train_loss,label=f"GDM,beta=0.9", color="orange")
+
+    for i in range(5):
+        gdm_sharpness_1 = torch.load(f"{gdm_directory}/eigs_{save_name}")[:,i]
+        gdm_sharpness_2 = torch.load(f"{gdm_directory}/acc_0.99/eigs_{save_name}")[:,i]
+        gdm_sharpness = torch.cat((gdm_sharpness_1,gdm_sharpness_2))
+        axs[1].plot(torch.arange(len(gdm_sharpness)) * gd_eig_freq, gdm_sharpness, color="orange")
+        if i== 4:
+            axs[1].plot(torch.arange(len(gdm_sharpness)) * gd_eig_freq, gdm_sharpness, color="orange",label="beta0.9")
+    axs[1].axhline(2*(1.9) / gdm_lr, linestyle='dotted',label="MSS_GDM")
+
+    color = "purple"
+    lr = gd_lr/10
+    gdm_directory = f"{environ['RESULTS']}/{dataset}/{arch}/seed_0/{loss}/{momentum}/lr_{lr}_beta_0.9/warmup_beta_0.99/acc_0.99"
+    mode='global_scaling'
+    scaling=1.0
+    nfilter=1
+    save_name = "{}_{}_top_{}_step".format(mode, scaling,nfilter)
+
+    gdm_train_loss = torch.load(f"{gdm_directory}/train_loss_{save_name}")
+    axs[0].plot(gdm_train_loss,label=f"GDM,warmup beta", color=color)
+
+    for i in range(5):
+        gdm_sharpness = torch.load(f"{gdm_directory}/eigs_{save_name}")[:,i]
+        axs[1].plot(torch.arange(len(gdm_sharpness)) * gd_eig_freq, gdm_sharpness, color=color)
+        if i== 4:
+            axs[1].plot(torch.arange(len(gdm_sharpness)) * gd_eig_freq, gdm_sharpness, color=color,label="warmup_beta")
+    axs[1].axhline(2*(1.9) / lr, linestyle='dotted',label="MSS_GDM")
+
+
+if compare_bulk_gd ==1:
+    mode_bulk='flat_scaling_v1'
+    scaling_bulk=3.0
+    nfilter_bulk=80
+    save_name_bulk = "bulk_{}_{}_top_{}_step".format(mode_bulk, scaling_bulk,nfilter_bulk)
+    gd_train_loss_bulk = torch.load(f"{gd_directory}/train_loss_{save_name_bulk}")
+    train_loss_bulk = torch.cat((torch.tensor([np.nan]*middlePoint), gd_train_loss_bulk))
+    axs[0].plot(train_loss_bulk, color = "green",label=f"GD,bulk_scaling_{scaling_bulk}")
+
+    for i in range(5):
+        gd_sharpness = torch.load(f"{gd_directory}/eigs_{save_name_bulk}")[:,i]
+        axs[1].plot(middlePoint+torch.arange(len(gd_sharpness)) * gd_eig_freq, gd_sharpness, color="green")
+        if i== 4:
+            axs[1].plot(middlePoint+torch.arange(len(gd_sharpness)) * gd_eig_freq, gd_sharpness, color="green",label=f"GD_{mode_bulk}_{scaling_bulk}_top5")
+
+    mode_bulk='flat_scaling_v1'
+    scaling_bulk=1.0
+    nfilter_bulk=50
+    save_name_bulk = "bulk_{}_{}_top_{}_step".format(mode_bulk, scaling_bulk,nfilter_bulk)
+    gd_train_loss_bulk = torch.load(f"{gd_directory}/train_loss_{save_name_bulk}")
+    train_loss_bulk = torch.cat((torch.tensor([np.nan]*middlePoint), gd_train_loss_bulk))
+    axs[0].plot(train_loss_bulk, color = "red",label=f"GD,bulk_scaling_{scaling_bulk}")
+
+    for i in range(5):
+        gd_sharpness = torch.load(f"{gd_directory}/eigs_{save_name_bulk}")[:,i]
+        axs[1].plot(middlePoint+torch.arange(len(gd_sharpness)) * gd_eig_freq, gd_sharpness, color="red")
+        if i== 4:
+            axs[1].plot(middlePoint+torch.arange(len(gd_sharpness)) * gd_eig_freq, gd_sharpness, color="red",label=f"GD_{mode_bulk}_{scaling_bulk}_top5")
+
+
+
+
+
+axs[0].legend()
+
+#axs[1].set_xlim(0,2500)
+
+
+axs[1].set_title("top eigenvalues")
 axs[1].legend()
-axs[1].set_xlabel("iteration")
+axs[1].set_xlabel("epochs")
+
+
 
 makedirs(f"{gd_directory}/figures", exist_ok=True)
-plt.savefig(f"{gd_directory}/figures/sharpness_flow_{mode}_{scaling}_top{nfilter}.png", bbox_inches='tight', pad_inches=0)
+#plt.show()
+plt.savefig(f"{gd_directory}/figures/{fig_name}", bbox_inches='tight', pad_inches=0)
 

@@ -14,14 +14,14 @@ momentum = "polyak"
 middlePoint=1000
 gdm_lr = gd_lr/10
 compare_flat_scaling = 0
-compare_gd = 0
-compare_gdm=1
+compare_gd = 1
+compare_gdm=0
 compare_bulk_gd = 0
 compare_gdm_beta_99 =0
 compare_gdm_beta_50 =0
 compare_gdm_warmup_beta = 0
 
-compare_gdm_acc_09 = 1
+compare_gdm_acc_09 = 0
 
 #gd_directory = f"{environ['RESULTS']}/{dataset}/{arch}/seed_0/{loss}/gd/lr_{gd_lr}"
 fig, axs = plt.subplots(2, 1, figsize=(10, 10), dpi=100, sharex=True)
@@ -40,12 +40,12 @@ axs[0].set_title("train loss")
 if compare_gd ==1:
     mode='global_scaling'
     scaling=1.0
-    nfilter=20
+    nfilter=60
     save_name = "{}_{}_top_{}_step".format(mode, scaling,nfilter)
     gd_train_loss = torch.load(f"{gd_directory}/train_loss_{save_name}")
     axs[0].plot(gd_train_loss,label=f"GD,eta={gd_lr}", color="MediumBlue")
 
-    for i in range(5):
+    for i in range(60):
         gd_sharpness = torch.load(f"{gd_directory}/eigs_{save_name}")[:,i]
         axs[1].plot(torch.arange(len(gd_sharpness)) * gd_eig_freq, gd_sharpness, color="MediumBlue")
         if i== 4:
@@ -234,5 +234,5 @@ axs[1].set_xlabel("iteration")
 
 makedirs(f"{gd_directory}/figures", exist_ok=True)
 #plt.show()
-plt.savefig(f"{gd_directory}/figures/acc099_warmup_beta_GDM_cifar10.png", bbox_inches='tight', pad_inches=0)
+plt.savefig(f"{gd_directory}/figures/pureGD_cifar10.png", bbox_inches='tight', pad_inches=0)
 

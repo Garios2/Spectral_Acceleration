@@ -155,7 +155,7 @@ def lanczos(matrix_vector, dim: int, neigs: int):
 
 
 def get_hessian_eigenvalues(network: nn.Module, loss_fn: nn.Module, dataset: Dataset,
-                            neigs=6, physical_batch_size=1000):
+                            neigs=6, physical_batch_size=1000, compute_directional_hessian=0):
     """ Compute the leading Hessian eigenvalues. """
     hvp_delta = lambda delta: compute_hvp(network, loss_fn, dataset,
                                           delta, physical_batch_size=physical_batch_size).detach().cpu()
@@ -163,6 +163,13 @@ def get_hessian_eigenvalues(network: nn.Module, loss_fn: nn.Module, dataset: Dat
     evals, evecs = lanczos(hvp_delta, nparams, neigs=neigs)
     return evals, evecs
 
+
+def get_directional_Hessian(network: nn.Module, loss_fn: nn.Module, dataset: Dataset,grads,
+                            neigs=6, physical_batch_size=1000):
+    """ Compute the leading Hessian eigenvalues. """
+    hvp_delta = lambda delta: compute_hvp(network, loss_fn, dataset,
+                                          delta, physical_batch_size=physical_batch_size).detach().cpu()
+    return torch.dot(grads,hvp_delta(grads))
 
 def compute_gradient(network: nn.Module, loss_fn: nn.Module,
                      dataset: Dataset, physical_batch_size: int = DEFAULT_PHYS_BS):
