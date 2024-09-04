@@ -128,16 +128,17 @@ if compare_gdm_beta_99==1:
     axs[1].axhline(3.99 / (lr*scaling), linestyle='dotted',label="MSS_GDM")
 
 if compare_gd ==1:
-    dataset = "cifar10"
+    dataset = "cifar10-5k"
     color = "red"
-    lr = 0.05
+    lr = 0.017
     loss = 'mse'
     arch = 'cnn-relu'
     gd_directory = f"{environ['RESULTS']}/{dataset}/{arch}/seed_0/{loss}/gd/lr_{lr}/acc_0.99/bulk-only"
     mode='global_scaling'
     scaling=1.0
-    nfilter=10
+    nfilter=1
     cubic = 0
+    propo=0
     save_name = "{}_{}_top_{}_step".format(mode, scaling,nfilter)
     gd_train_loss = torch.load(f"{gd_directory}/train_loss_{save_name}")
 
@@ -195,7 +196,6 @@ if compare_gd ==1:
     #fake_sharpness = [y/(0.5*lr*x) for x,y in zip(domnorm,domsecorder)] # fake sharpness 很准
     bulknorm = [lr*torch.norm(u)**2 for u in bulk_grads]
     
-    propo=0
     # 展示Dom和Bulk在梯度中的比例
     if propo==1:
         dom_propotion = [x/y for x,y in zip(domnorm,gnorm)] 
@@ -427,3 +427,12 @@ makedirs(f"{gd_directory}/figures", exist_ok=True)
 #plt.show()
 plt.savefig(f"{gd_directory}/figures/{fig_name}", bbox_inches='tight', pad_inches=0)
 
+
+import os
+file_path = f"figures/{gd_directory}/figures/{fig_name}"
+directory = os.path.dirname(file_path)
+
+# 如果目录不存在，则创建它
+if not os.path.exists(directory):
+    os.makedirs(directory)
+plt.savefig(file_path, bbox_inches='tight', pad_inches=0)
