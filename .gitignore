@@ -7,9 +7,17 @@ demo.py
 data/
 src/outputlog/
 # 忽略 result 文件夹中的所有内容
+# 忽略 results 文件夹中的所有内容
 results/**
 
-# 但不忽略任意深度的 figure 文件夹
-!results/**/figures/
-!results/**/figures/**/*
-
+# 但不忽略 figures 文件夹及其内容
+!results/*/*/*/*/*/figures/
+!results/*/*/*/*/*/figures/**
+!results/*/*/*/*/*/*/figures/
+!results/*/*/*/*/*/*/figures/**
+!results/*/*/*/*/*/*/*/figures/
+!results/*/*/*/*/*/*/*/figures/**
+!results/*/*/*/*/*/*/*/*/figures/
+!results/*/*/*/*/*/*/*/*/figures/**
+!results/*/*/*/*/*/*/*/*/*/figures/
+!results/*/*/*/*/*/*/*/*/*/figures/**
