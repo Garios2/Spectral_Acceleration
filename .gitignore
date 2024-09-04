@@ -6,31 +6,10 @@ demo.py
 .idea
 data/
 src/outputlog/
-results/*
-!results/cifar10/
-results/cifar10/*
-!results/cifar10/fc-tanh/
-results/cifar10/fc-tanh/*
-!results/cifar10/fc-tanh/seed_0/
-results/cifar10/fc-tanh/seed_0/*
-!results/cifar10/fc-tanh/seed_0/mse/
-results/cifar10/fc-tanh/seed_0/mse/*
-!results/cifar10/fc-tanh/seed_0/mse/gd/
-results/cifar10/fc-tanh/seed_0/mse/gd/*
-!results/cifar10/fc-tanh/seed_0/mse/gd/lr_0.02/
-results/cifar10/fc-tanh/seed_0/mse/gd/lr_0.02/*
-!results/cifar10/fc-tanh/seed_0/mse/gd/lr_0.02/figures
+# 忽略 result 文件夹中的所有内容
+results/**
 
-!results/cifar10-20k/
-results/cifar10-20k/*
-!results/cifar10-20k/fc-tanh/
-results/cifar10-20k/fc-tanh/*
-!results/cifar10-20k/fc-tanh/seed_0/
-results/cifar10-20k/fc-tanh/seed_0/*
-!results/cifar10-20k/fc-tanh/seed_0/mse/
-results/cifar10-20k/fc-tanh/seed_0/mse/*
-!results/cifar10-20k/fc-tanh/seed_0/mse/gd/
-results/cifar10-20k/fc-tanh/seed_0/mse/gd/*
-!results/cifar10-20k/fc-tanh/seed_0/mse/gd/lr_0.05/
-results/cifar10-20k/fc-tanh/seed_0/mse/gd/lr_0.05/*
-!results/cifar10-20k/fc-tanh/seed_0/mse/gd/lr_0.05/figures
+# 但不忽略任意深度的 figure 文件夹
+!results/**/figures/
+!results/**/figures/**/*
+

@@ -5,7 +5,7 @@ import torch
 import torch.nn as nn
 from scipy.sparse.linalg import LinearOperator, eigsh
 from torch import Tensor
-from torch.nn.utils import parameters_to_vector, vector_to_parameters
+from torch.nn.utils import  vector_to_parameters
 from torch.optim import SGD
 from torch.optim.optimizer import Optimizer
 from torch.utils.data import Dataset, DataLoader
@@ -124,20 +124,7 @@ def get_loss_and_acc(loss: str):
     raise NotImplementedError(f"no such loss function: {loss}")
 
 
-def compute_hvp(network: nn.Module, loss_fn: nn.Module,
-                dataset: Dataset, vector: Tensor, physical_batch_size: int = DEFAULT_PHYS_BS):
-    """Compute a Hessian-vector product."""
-    p = len(parameters_to_vector(network.parameters()))
-    n = len(dataset)
-    hvp = torch.zeros(p, dtype=torch.float, device='cuda')
-    vector = vector.to(device)
-    for (X, y) in iterate_dataset(dataset, physical_batch_size):
-        loss = loss_fn(network(X), y) / n
-        grads = torch.autograd.grad(loss, inputs=network.parameters(), create_graph=True)
-        dot = parameters_to_vector(grads).mul(vector).sum()
-        grads = [g.contiguous() for g in torch.autograd.grad(dot, network.parameters(), retain_graph=True)]
-        hvp += parameters_to_vector(grads)
-    return hvp
+
 
 
 def lanczos(matrix_vector, dim: int, neigs: int):
@@ -181,6 +168,59 @@ def compute_gradient(network: nn.Module, loss_fn: nn.Module,
         batch_gradient = parameters_to_vector(torch.autograd.grad(batch_loss, inputs=network.parameters()))
         average_gradient += batch_gradient
     return average_gradient
+
+def compute_hvp(network: nn.Module, loss_fn: nn.Module,
+                dataset: Dataset, vector: Tensor, physical_batch_size: int = DEFAULT_PHYS_BS):
+    """Compute a Hessian-vector product."""
+    p = len(parameters_to_vector(network.parameters()))
+    n = len(dataset)
+    hvp = torch.zeros(p, dtype=torch.float, device='cuda')
+    vector = vector.to(device)
+    for (X, y) in iterate_dataset(dataset, physical_batch_size):
+        loss = loss_fn(network(X), y) / n
+        grads = torch.autograd.grad(loss, inputs=network.parameters(), create_graph=True)
+        dot = parameters_to_vector(grads).mul(vector).sum()
+        grads = [g.contiguous() for g in torch.autograd.grad(dot, network.parameters(), retain_graph=True)]
+        hvp += parameters_to_vector(grads)
+    return hvp
+
+
+def compute_third_order_hvp(network: nn.Module, loss_fn: nn.Module, dataset: Dataset, vector: Tensor, physical_batch_size: int = DEFAULT_PHYS_BS):
+    """Compute a third-order Cubic-vector-vector product."""
+    p = len(parameters_to_vector(network.parameters()))
+    n = len(dataset)
+    third_order_hvp = torch.zeros(p, dtype=torch.float, device='cuda')
+    vector = vector.to('cuda')
+    #vector.requires_grad = True
+    
+    for param in network.parameters():
+        param.requires_grad = True
+    
+    for (X, y) in iterate_dataset(dataset, physical_batch_size):
+        X = X.to('cuda')
+        y = y.to('cuda')
+        
+        loss = loss_fn(network(X), y) / n
+        grads = torch.autograd.grad(loss, inputs=network.parameters(), create_graph=True)
+        dot = parameters_to_vector(grads).mul(vector).sum()  # inner product
+        
+        grads = torch.autograd.grad(dot, network.parameters(), create_graph=True)  # hessian vector product
+        
+        dot = parameters_to_vector(grads).mul(vector).sum()
+        grads = [g.contiguous() for g in torch.autograd.grad(dot, network.parameters(), retain_graph=True)]  # cubic vector vector product
+        
+        third_order_hvp += parameters_to_vector(grads)
+    
+    return third_order_hvp
+
+
+def parameters_to_vector(parameters):
+    """Convert parameters to a single vector."""
+    vec = []
+    for param in parameters:
+        vec.append(param.reshape(-1))
+    return torch.cat(vec)
+
 
 
 class AtParams(object):

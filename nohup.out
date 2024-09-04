@@ -1,0 +1,68 @@
+usage: gd.py [-h] [--opt {gd,polyak,nesterov}]
+             [--mode {global_scaling,flat_scaling_v1,flat_scaling_v2}]
+             [--seed SEED] [--beta BETA] [--BS BS]
+             [--physical_batch_size PHYSICAL_BATCH_SIZE] [--acc_goal ACC_GOAL]
+             [--loss_goal LOSS_GOAL] [--neigs NEIGS] [--eig_freq EIG_FREQ]
+             [--nproj NPROJ] [--iterate_freq ITERATE_FREQ]
+             [--abridged_size ABRIDGED_SIZE] [--save_freq SAVE_FREQ]
+             [--save_model SAVE_MODEL] [--save_middle_model SAVE_MIDDLE_MODEL]
+             [--scaling SCALING] [--nfilter NFILTER]
+             {cifar10,cifar10-1k,cifar10-2k,cifar10-5k,cifar10-10k,cifar10-20k,chebyshev-3-20,chebyshev-4-20,chebyshev-5-20,linear-50-50}
+             arch_id {ce,mse} lr max_steps
+gd.py: error: argument --BS: expected one argument
+cuda
+cuda
+usage: gd.py [-h] [--opt {gd,polyak,nesterov}]
+             [--mode {global_scaling,flat_scaling_v1,flat_scaling_v2}]
+             [--seed SEED] [--beta BETA] [--BS BS]
+             [--physical_batch_size PHYSICAL_BATCH_SIZE] [--acc_goal ACC_GOAL]
+             [--loss_goal LOSS_GOAL] [--neigs NEIGS] [--eig_freq EIG_FREQ]
+             [--nproj NPROJ] [--iterate_freq ITERATE_FREQ]
+             [--abridged_size ABRIDGED_SIZE] [--save_freq SAVE_FREQ]
+             [--save_model SAVE_MODEL] [--save_middle_model SAVE_MIDDLE_MODEL]
+             [--scaling SCALING] [--nfilter NFILTER]
+             {cifar10,cifar10-1k,cifar10-2k,cifar10-5k,cifar10-10k,cifar10-20k,chebyshev-3-20,chebyshev-4-20,chebyshev-5-20,linear-50-50}
+             arch_id {ce,mse} lr max_steps
+gd.py: error: argument --BS: expected one argument
+cuda
+cuda
+usage: gd.py [-h] [--opt {gd,polyak,nesterov}]
+             [--mode {global_scaling,flat_scaling_v1,flat_scaling_v2}]
+             [--seed SEED] [--beta BETA] [--BS BS]
+             [--physical_batch_size PHYSICAL_BATCH_SIZE] [--acc_goal ACC_GOAL]
+             [--loss_goal LOSS_GOAL] [--neigs NEIGS] [--eig_freq EIG_FREQ]
+             [--nproj NPROJ] [--iterate_freq ITERATE_FREQ]
+             [--abridged_size ABRIDGED_SIZE] [--save_freq SAVE_FREQ]
+             [--save_model SAVE_MODEL] [--save_middle_model SAVE_MIDDLE_MODEL]
+             [--scaling SCALING] [--nfilter NFILTER]
+             {cifar10,cifar10-1k,cifar10-2k,cifar10-5k,cifar10-10k,cifar10-20k,chebyshev-3-20,chebyshev-4-20,chebyshev-5-20,linear-50-50}
+             arch_id {ce,mse} lr max_steps
+gd.py: error: argument --BS: expected one argument
+cuda
+cuda
+Traceback (most recent call last):
+  File "/data/users/zhouwenjie/workspace/Spectral_Acceleration/src/gd.py", line 7, in <module>
+    from archs import load_architecture
+  File "/data/users/zhouwenjie/workspace/Spectral_Acceleration/src/archs.py", line 8, in <module>
+    from data import num_classes, num_input_channels, image_size, num_pixels
+  File "/data/users/zhouwenjie/workspace/Spectral_Acceleration/src/data.py", line 5, in <module>
+    from cifar import load_cifar
+  File "/data/users/zhouwenjie/workspace/Spectral_Acceleration/src/cifar.py", line 9, in <module>
+    DATASETS_FOLDER = os.environ["DATASETS"]
+                      ~~~~~~~~~~^^^^^^^^^^^^
+  File "<frozen os>", line 714, in __getitem__
+KeyError: 'DATASETS'
+usage: gd.py [-h] [--opt {gd,polyak,nesterov}]
+             [--mode {global_scaling,flat_scaling_v1,flat_scaling_v2}]
+             [--seed SEED] [--beta BETA] [--BS BS]
+             [--physical_batch_size PHYSICAL_BATCH_SIZE] [--acc_goal ACC_GOAL]
+             [--loss_goal LOSS_GOAL] [--neigs NEIGS] [--eig_freq EIG_FREQ]
+             [--nproj NPROJ] [--iterate_freq ITERATE_FREQ]
+             [--abridged_size ABRIDGED_SIZE] [--save_freq SAVE_FREQ]
+             [--save_model SAVE_MODEL] [--save_middle_model SAVE_MIDDLE_MODEL]
+             [--scaling SCALING] [--nfilter NFILTER]
+             {cifar10,cifar10-1k,cifar10-2k,cifar10-5k,cifar10-10k,cifar10-20k,chebyshev-3-20,chebyshev-4-20,chebyshev-5-20,linear-50-50}
+             arch_id {ce,mse} lr max_steps
+gd.py: error: argument --BS: expected one argument
+cuda
+cuda

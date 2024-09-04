@@ -75,11 +75,10 @@ if gdm == 1:
     """
 
 
-fig_name = f"GDM_BulkGD_-cifar10_8.png"
 
 if compare_bulk_gd_1 ==1:
     for nfilter in [40,100]:
-        dataset = "cifar10-5k"
+        dataset = "cifar10"
         #color = "blue"
         color = cmap(nfilter/100)
         lr = 0.04
@@ -128,17 +127,17 @@ if compare_gdm_beta_99==1:
             axs[1].plot(torch.arange(len(gd_sharpness)) * gd_eig_freq, gd_sharpness, color=color)
     axs[1].axhline(3.99 / (lr*scaling), linestyle='dotted',label="MSS_GDM")
 
-
 if compare_gd ==1:
-    dataset = "cifar10-5k"
+    dataset = "cifar10"
     color = "red"
-    lr = 0.016
-    loss = 'ce'
+    lr = 0.05
+    loss = 'mse'
     arch = 'cnn-relu'
     gd_directory = f"{environ['RESULTS']}/{dataset}/{arch}/seed_0/{loss}/gd/lr_{lr}/acc_0.99/bulk-only"
     mode='global_scaling'
     scaling=1.0
-    nfilter=1
+    nfilter=10
+    cubic = 0
     save_name = "{}_{}_top_{}_step".format(mode, scaling,nfilter)
     gd_train_loss = torch.load(f"{gd_directory}/train_loss_{save_name}")
 
@@ -149,29 +148,88 @@ if compare_gd ==1:
     grads = torch.load(f"{gd_directory}/grads_{mode}_{scaling}_top_{nfilter}_step")
     dom_grads = grads.clone()-bulk_grads.clone()
 
+    #fake_sharpness_1 = torch.load(f"{gd_directory}/fake_sharpness_one_{mode}_{scaling}_top_{nfilter}_step")
+    #fake_sharpness_2 = torch.load(f"{gd_directory}/fake_sharpness_two_{mode}_{scaling}_top_{nfilter}_step")
+    if cubic == 1:
+        cubic_term = torch.load(f"{gd_directory}/cubic_term_{mode}_{scaling}_top_{nfilter}_step")
+        dom_cubic = torch.load(f"{gd_directory}/dom_cubic_{mode}_{scaling}_top_{nfilter}_step")
+        bulk_cubic = torch.load(f"{gd_directory}/bulk_cubic_{mode}_{scaling}_top_{nfilter}_step")
+        print(dom_cubic.shape)
+        print(bulk_cubic.shape)
 
+        min_length = min(len(quadratic_update), len(cubic_term))
 
-    b_update = bulk_update.clone()
+        # 截取较短长度的张量
+        quadratic_update_short = quadratic_update[:min_length]
+        cubic_term_short = cubic_term[:min_length]
+        cubic_update = quadratic_update_short + cubic_term_short
+
+        dom_update_short = dom_update[:min_length]
+        print(dom_update_short.shape)
+        dom_cubic_short = dom_cubic[:,0]
+
+        dom_cubic_update = dom_update_short + dom_cubic_short
+
+    b_update = torch.zeros_like(bulk_update)
     g_update =[]
-    d_update= dom_update.clone()
+    d_update=  torch.zeros_like(bulk_update)
 
     eigvals = torch.load(f"{gd_directory}/eigs_{mode}_{scaling}_top_{nfilter}_step")
+    domnorm = [lr*torch.norm(u)**2 for u in dom_grads]# domnorm 在单个特征向量的时候就是c_i ** 2
+    gnorm = [lr*torch.norm(u)**2 for u in grads]
+    linear_update=  torch.zeros_like(bulk_update)
+    linear_update[0] = gd_train_loss[0]
     # 对于每个元素，计算新的值
     for i in range(1,len(b_update)):
-        b_update[-i] = b_update[-i] - b_update[-i-1]
-        d_update[-i] = d_update[-i] - d_update[-i-1]
+        b_update[i] = bulk_update[i] - bulk_update[i-1]
+        d_update[i] = dom_update[i] - dom_update[i-1]
+        linear_update[i] = linear_update[i-1] -gnorm[i-1]
     b_update[0] = 0
     d_update[0] = 0
 
-    domnorm = [lr*torch.norm(u)**2 for u in dom_grads]
-    
-    #print(d_update)
-    axs[0].plot(gd_train_loss,label=f"GD lr = {lr}", color=color)
-    axs[0].plot(quadratic_update,label=f"Quadratic approximation", color="blue",alpha=0.5)
-    axs[0].plot(domnorm,label=f"Dom_update", color="orange")
-    axs[0].plot(bulk_update,label=f"Bulk_update", color="green")
+    d_update = torch.cat((d_update[1:], torch.tensor([0])))
 
-    print(f"dom_update:{torch.sum(d_update)}")
+    #axs[0].plot(linear_update,label="linear",color = "yellow")
+
+    domsecorder = [x+y for x,y in zip(d_update,domnorm)]
+    #fake_sharpness = [y/(0.5*lr*x) for x,y in zip(domnorm,domsecorder)] # fake sharpness 很准
+    bulknorm = [lr*torch.norm(u)**2 for u in bulk_grads]
+    
+    propo=0
+    # 展示Dom和Bulk在梯度中的比例
+    if propo==1:
+        dom_propotion = [x/y for x,y in zip(domnorm,gnorm)] 
+        bulk_propotion = [x/y for x,y in zip(bulknorm,gnorm)]
+        axs[0].plot(dom_propotion,label=f"Dom_propo", color="green")
+        axs[0].plot(bulk_propotion,label=f"bulk_propo", color="red")
+    fig_name = f"GDM_BulkGD_-cifar10_{propo}.png"
+
+    #print(d_update)
+    axs[0].plot(gd_train_loss,label=f"GD lr = {lr}", color=color,alpha=0.3)
+    axs[0].plot(quadratic_update,label=f"Quadratic approximation", color="orange",alpha=0.5)
+    #axs[0].plot(dom_cubic_update,label=f"Dom cubic update", color="black",alpha=0.5)
+    # 一二阶的更新
+    axs[0].plot(dom_update,label=f"Dom update", color="black",alpha=0.5)
+    axs[0].plot(bulk_update,label=f"Bulk update", color="blue",alpha=0.5)
+
+    #axs[0].plot(cubic_term,color = "black",alpha = 1,label = "cubic term")
+
+    #axs[0].plot(cubic_update,color = "green",alpha = 0.5,label = "Cubic approximation")
+    #axs[0].set_ylim(0,3)
+    #axs[0].set_xlim(-20,300)
+    #axs[0].plot(dom_update,label=f"Dom_update", color="black")
+    #axs[0].plot(bulk_update,label=f"Bulk_update", color="green")
+
+    #axs[0].plot(domsecorder,label=f"second_order", color="purple")
+    #axs[1].plot(fake_sharpness_1,color = "blue",alpha = 0.4)
+    #axs[1].plot(fake_sharpness_2*2*lr,color = "green",alpha = 0.4)
+    #axs[1].plot(fake_sharpness,color = "orange",alpha = 0.8)
+
+
+    print(f"secondorder_sum: {torch.sum(torch.tensor(domsecorder))}")
+    #print(f"cubic_sum: {torch.sum(torch.tensor(cubic_term))}")
+   
+    print(f"dom_update:{torch.sum(d_update[50:150])}")
     print(f"bulk_update:{torch.sum(b_update)}")
     print(f"quadratic_update:{torch.sum(b_update)+torch.sum(d_update) }")
 
@@ -180,11 +238,12 @@ if compare_gd ==1:
 
     for i in range(5):
         gd_sharpness = torch.load(f"{gd_directory}/eigs_{save_name}")[:,i]
-        axs[1].plot(torch.arange(len(gd_sharpness)) * gd_eig_freq, gd_sharpness, color=color)
+        axs[1].plot(torch.arange(len(gd_sharpness)) * gd_eig_freq, gd_sharpness, color=color,alpha = 0.8)
         if i== 4:
             axs[1].plot(torch.arange(len(gd_sharpness)) * gd_eig_freq, gd_sharpness, color=color)
     axs[1].axhline(2 / (lr*scaling), linestyle='dotted',label="MSS_GD",color=color)
 
+    #axs[1].set_ylim(0,400)
 
 
 if compare_flat_scaling==1:
